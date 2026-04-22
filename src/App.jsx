@@ -771,31 +771,74 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         )}
       </Card>
 
-      {/* Sleep inputs */}
-      <Card>
-        <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.8,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
-          <Icon name="moon" size={12}/> SOMMEIL
+      {/* Sleep inputs — Réveil left, Coucher right, reset clears all three fields */}
+      <Card style={{padding:16}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:0.8,display:"flex",alignItems:"center",gap:7,textTransform:"uppercase"}}>
+            <div style={{width:24,height:24,borderRadius:7,background:C.green+"14",border:`1px solid ${C.green}26`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Icon name="moon" size={12} color={C.green}/>
+            </div>
+            Sommeil
+          </div>
+          {(dayBody.bedTime || dayBody.wakeTime || dayBody.sleep != null) && (
+            <button
+              onClick={()=>updateBody({bedTime:"", wakeTime:"", sleep:null})}
+              title="Réinitialiser le sommeil"
+              aria-label="Réinitialiser le sommeil"
+              style={{
+                display:"inline-flex",alignItems:"center",gap:5,
+                padding:"5px 10px",borderRadius:999,
+                background:"transparent",border:`1px solid ${C.border2}`,
+                color:C.text3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:FONT,
+                transition:"all .15s",
+              }}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red+"50";e.currentTarget.style.color=C.red;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text3;}}>
+              <Icon name="rotate" size={12}/> Réinitialiser
+            </button>
+          )}
         </div>
         <div className="sleep-grid">
+          {/* Réveil — LEFT */}
           <div className="sleep-cell">
-            <div style={{fontSize:10,color:C.text4,fontWeight:500,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>
-              <Icon name="bed" size={11}/> Coucher
-            </div>
-            <input type="time" value={dayBody.bedTime||""} onChange={e=>handleSetBed(e.target.value)}
-              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,padding:"10px 12px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%"}}/>
-          </div>
-          <div className="sleep-cell">
-            <div style={{fontSize:10,color:C.text4,fontWeight:500,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>
-              <Icon name="sunrise" size={11}/> Réveil
+            <div style={{fontSize:10,color:C.text4,fontWeight:600,marginBottom:6,display:"flex",alignItems:"center",gap:4,letterSpacing:0.3,textTransform:"uppercase"}}>
+              <Icon name="sunrise" size={11} color={C.gold}/> Réveil
             </div>
             <input type="time" value={dayBody.wakeTime||""} onChange={e=>handleSetWake(e.target.value)}
-              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,padding:"10px 12px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%"}}/>
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"11px 13px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%",fontWeight:600,letterSpacing:-0.2}}/>
           </div>
-          <div className="sleep-cell sleep-duration" style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,padding:"8px 12px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
-            <div style={{fontSize:10,color:C.text4,fontWeight:500}}>Durée</div>
-            <div style={{fontSize:20,fontWeight:700,color:dayBody.sleep?C.green:C.text4,letterSpacing:-0.5,lineHeight:1.1}}>
-              {dayBody.sleep ? `${dayBody.sleep}h` : "—"}
+          {/* Coucher — RIGHT */}
+          <div className="sleep-cell">
+            <div style={{fontSize:10,color:C.text4,fontWeight:600,marginBottom:6,display:"flex",alignItems:"center",gap:4,letterSpacing:0.3,textTransform:"uppercase"}}>
+              <Icon name="bed" size={11} color={C.green}/> Coucher
             </div>
+            <input type="time" value={dayBody.bedTime||""} onChange={e=>handleSetBed(e.target.value)}
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"11px 13px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%",fontWeight:600,letterSpacing:-0.2}}/>
+          </div>
+          {/* Durée — spans full width on mobile */}
+          <div className="sleep-cell sleep-duration" style={{
+            background: dayBody.sleep ? `linear-gradient(135deg, ${C.green}12, ${C.green}04)` : C.bg2,
+            border: `1px solid ${dayBody.sleep ? C.green+"30" : C.border2}`,
+            borderRadius:10,padding:"10px 14px",
+            display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
+            transition:"all .25s",
+          }}>
+            <div>
+              <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.3,textTransform:"uppercase"}}>Durée</div>
+              <div style={{fontSize:22,fontWeight:800,color:dayBody.sleep?C.green:C.text4,letterSpacing:-0.7,lineHeight:1.1,marginTop:2,textShadow:dayBody.sleep?`0 0 16px ${C.green}44`:"none"}}>
+                {dayBody.sleep ? `${dayBody.sleep}h` : "—"}
+              </div>
+            </div>
+            {dayBody.sleep != null && (
+              <div style={{
+                fontSize:10,fontWeight:700,letterSpacing:0.4,textTransform:"uppercase",
+                color: dayBody.sleep >= 7.5 ? C.green : dayBody.sleep >= 6 ? C.gold : C.red,
+                padding:"3px 8px",borderRadius:999,
+                background: (dayBody.sleep >= 7.5 ? C.green : dayBody.sleep >= 6 ? C.gold : C.red) + "18",
+              }}>
+                {dayBody.sleep >= 7.5 ? "Optimal" : dayBody.sleep >= 6 ? "OK" : "Dette"}
+              </div>
+            )}
           </div>
         </div>
       </Card>
