@@ -32,49 +32,91 @@ function useFS(key, def) {
   return [val, set, rdy];
 }
 
-// ─── DESIGN TOKENS ────────────────────────────────────────────────────────────
+// ─── DESIGN TOKENS (DARK / GOLD / GREEN) ─────────────────────────────────────
 const C = {
-  bg:     "#060a10",
-  bg2:    "#0b1119",
-  card:   "#10161f",
-  card2:  "#0d131c",
-  border: "#1c2230",
-  border2:"#2a3142",
+  bg:     "#05080d",
+  bg2:    "#0a0f17",
+  card:   "#0f141c",
+  card2:  "#0c1118",
+  border: "#1a2130",
+  border2:"#262e40",
   text:   "#e8edf5",
-  text2:  "#9ca3af",
-  text3:  "#6b7280",
-  text4:  "#4b5563",
+  text2:  "#a3acba",
+  text3:  "#6e7685",
+  text4:  "#464d5c",
   gold:   "#f5c056",
   goldD:  "#d4a73e",
   green:  "#10b981",
   greenD: "#0d9668",
-  red:    "#ef4444",
-  blue:   "#60a5fa",
-  purple: "#a78bfa",
+  red:    "#e5484d",
+};
+const FONT = "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+
+// ─── ICON SYSTEM (thin SVG, consistent stroke) ───────────────────────────────
+const ICONS = {
+  sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></>,
+  moon: <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>,
+  check: <polyline points="20 6 9 17 4 12"/>,
+  checkCircle: <><circle cx="12" cy="12" r="10"/><polyline points="16 10 11 15 8 12"/></>,
+  checkSquare: <><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></>,
+  listCheck: <><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><polyline points="3 6 4 7 6 5"/><polyline points="3 12 4 13 6 11"/><polyline points="3 18 4 19 6 17"/></>,
+  bar: <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
+  sparkles: <><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></>,
+  user: <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
+  plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+  edit: <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
+  trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></>,
+  calendar: <><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+  calendarPlus: <><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></>,
+  clock: <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+  target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+  flame: <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.3 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>,
+  droplet: <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>,
+  activity: <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>,
+  briefcase: <><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></>,
+  book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/></>,
+  play: <polygon points="6 4 20 12 6 20 6 4"/>,
+  stop: <rect x="6" y="6" width="12" height="12" rx="1"/>,
+  x: <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+  arrowUp: <><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></>,
+  chevL: <polyline points="15 18 9 12 15 6"/>,
+  chevR: <polyline points="9 18 15 12 9 6"/>,
+  chevD: <polyline points="6 9 12 15 18 9"/>,
+  sunrise: <><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></>,
+  bed: <><path d="M2 4v16"/><path d="M2 8h18a4 4 0 0 1 4 4v8"/><path d="M2 17h22"/><path d="M7 8V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/></>,
+  alert: <><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></>,
+  trendUp: <><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></>,
+  trendDown: <><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></>,
+  rotate: <><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></>,
+  filter: <polygon points="22 3 2 3 10 12.5 10 19 14 21 14 12.5 22 3"/>,
+  settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
+  dumbbell: <><path d="M6.5 6.5L17.5 17.5"/><path d="M21 21l-1-1M3 3l1 1"/><path d="M18 22l4-4"/><path d="M2 6l4-4"/><path d="M3 10l7-7 4 4-7 7-4-4z"/><path d="M14 21l7-7-4-4-7 7 4 4z"/></>,
 };
 
-// ─── CATEGORIES (restructured: 5 clean cats + legacy alias) ──────────────────
+const Icon = ({name, size=18, stroke=1.7, color="currentColor", style={}}) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+    strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round"
+    style={{flexShrink:0, display:"inline-block", verticalAlign:"middle", ...style}}>
+    {ICONS[name] || null}
+  </svg>
+);
+
+// ─── CATEGORIES ──────────────────────────────────────────────────────────────
 const CATS = {
-  Spiritual:  { color: "#a78bfa", emoji: "🕌" },
-  Sport:      { color: "#10b981", emoji: "🏃" },
-  Business:   { color: "#f5c056", emoji: "💼" },
-  Health:     { color: "#60a5fa", emoji: "💧" },
-  Discipline: { color: "#ef4444", emoji: "🔥" },
+  Spiritual:  { color: C.text2,  icon: "moon" },
+  Sport:      { color: C.green,  icon: "activity" },
+  Business:   { color: C.gold,   icon: "briefcase" },
+  Health:     { color: C.text2,  icon: "droplet" },
+  Discipline: { color: C.red,    icon: "flame" },
 };
-const CAT_ALIAS = {
-  Spirituality: "Spiritual",
-  Fitness:      "Sport",
-  Work:         "Business",
-  Mind:         "Discipline",
-  Personal:     "Discipline",
-};
+const CAT_ALIAS = { Spirituality:"Spiritual", Fitness:"Sport", Work:"Business", Mind:"Discipline", Personal:"Discipline" };
 const normCat = c => CAT_ALIAS[c] || (CATS[c] ? c : "Discipline");
 
-// ─── PRIORITY (low/medium/high + legacy alias) ───────────────────────────────
+// ─── PRIORITY ────────────────────────────────────────────────────────────────
 const PRIORITY = {
-  high:   { label: "Haute",   color: "#ef4444", order: 1 },
-  medium: { label: "Moyenne", color: "#f5c056", order: 2 },
-  low:    { label: "Basse",   color: "#10b981", order: 3 },
+  high:   { label: "Haute",   color: C.red,   order: 1 },
+  medium: { label: "Moyenne", color: C.gold,  order: 2 },
+  low:    { label: "Basse",   color: C.green, order: 3 },
 };
 const PRIO_ALIAS = { critique:"high", haute:"high", moyenne:"medium", basse:"low" };
 const normPrio = p => PRIO_ALIAS[p] || (PRIORITY[p] ? p : "medium");
@@ -98,7 +140,7 @@ const DEFAULT_HABITS = [
   { id:"h15", label:"Lecture 30min",  cat:"Discipline", freq:"daily", nn:false },
 ];
 
-const SPORT_TYPES = ["Course 🏃","Gym 🏋️","Boxe 🥊","Vélo 🚴","Natation 🏊","Yoga 🧘","Marche 🚶","Autre"];
+const SPORT_TYPES = ["Course","Gym","Boxe","Vélo","Natation","Yoga","Marche","Autre"];
 const DAY_NAMES   = ["D","L","M","Me","J","V","S"];
 const DAY_FULL    = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"];
 
@@ -119,45 +161,66 @@ const isApplicable = (h, dk) => {
   const dow = parseDate(dk).getDay();
   return h.freq === "daily" || (h.freq === "specific" && (h.days || []).includes(dow));
 };
+// Calculate sleep duration from wake & bed times (bed is previous evening)
+const calcSleep = (bedTime, wakeTime) => {
+  if (!bedTime || !wakeTime) return null;
+  const [bh,bm] = bedTime.split(":").map(Number);
+  const [wh,wm] = wakeTime.split(":").map(Number);
+  let mins = (wh*60+wm) - (bh*60+bm);
+  if (mins <= 0) mins += 24*60; // crossed midnight
+  return Math.round((mins / 60) * 10) / 10;
+};
+// Heatmap color: smooth red → neutral → green
+const heatColor = (pct, hasData) => {
+  if (!hasData) return C.border;
+  if (pct < 20)  return "#3d1a1f";
+  if (pct < 40)  return "#5a2328";
+  if (pct < 55)  return "#6b3a2e";
+  if (pct < 70)  return "#5f4a2a";
+  if (pct < 85)  return "#2d5a3e";
+  if (pct < 95)  return "#1a7d52";
+  return C.green;
+};
+const heatTextColor = pct => pct >= 85 ? "#00140a" : C.text2;
 
 // ─── UI PRIMITIVES ────────────────────────────────────────────────────────────
 const Card = ({children,style={},glow=false}) => (
   <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,
-    boxShadow: glow ? "0 0 0 1px rgba(245,192,86,0.08), 0 6px 24px -12px rgba(245,192,86,0.15)" : "none",
+    boxShadow: glow ? "0 0 0 1px rgba(245,192,86,0.06), 0 8px 32px -16px rgba(245,192,86,0.12)" : "none",
     ...style}}>{children}</div>
 );
 
 const Btn = ({children,onClick,variant="primary",style={},disabled=false,type="button"}) => {
   const styles = {
-    primary: {background:C.gold,color:"#000",fontWeight:800,boxShadow:"0 4px 14px -6px rgba(245,192,86,0.5)"},
-    green:   {background:C.green,color:"#000",fontWeight:800,boxShadow:"0 4px 14px -6px rgba(16,185,129,0.5)"},
+    primary: {background:C.gold,color:"#0a0a0a",fontWeight:700,boxShadow:"0 4px 14px -6px rgba(245,192,86,0.4)"},
+    green:   {background:C.green,color:"#001a10",fontWeight:700,boxShadow:"0 4px 14px -6px rgba(16,185,129,0.4)"},
     ghost:   {background:C.card,color:C.text2,fontWeight:600,border:`1px solid ${C.border2}`},
     outline: {background:"transparent",color:C.text,fontWeight:600,border:`1px solid ${C.border2}`},
-    danger:  {background:"rgba(239,68,68,.12)",color:C.red,fontWeight:600},
+    danger:  {background:"rgba(229,72,77,.1)",color:C.red,fontWeight:600,border:`1px solid ${C.red}30`},
   };
-  return <button type={type} onClick={onClick} disabled={disabled} style={{...styles[variant],border:styles[variant].border||"none",borderRadius:10,padding:"10px 16px",fontSize:13,cursor:disabled?"not-allowed":"pointer",fontFamily:"inherit",opacity:disabled?0.5:1,transition:"all .15s",...style}}>{children}</button>;
+  return <button type={type} onClick={onClick} disabled={disabled} style={{...styles[variant],border:styles[variant].border||"none",borderRadius:10,padding:"10px 16px",fontSize:13,cursor:disabled?"not-allowed":"pointer",fontFamily:FONT,opacity:disabled?0.5:1,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,letterSpacing:-0.1,...style}}>{children}</button>;
 };
 
 const FInput = ({label,value,onChange,type="text",placeholder="",style={}}) => (
   <div style={{display:"flex",flexDirection:"column",gap:6}}>
-    {label && <span style={{fontSize:11,color:C.text3,fontWeight:700,letterSpacing:0.5}}>{label}</span>}
+    {label && <span style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.4}}>{label}</span>}
     <input type={type} value={value} onChange={onChange} placeholder={placeholder}
-      style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 14px",fontSize:14,outline:"none",fontFamily:"inherit",...style}} />
+      style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 14px",fontSize:14,outline:"none",fontFamily:FONT,...style}} />
   </div>
 );
 
 const FText = ({label,value,onChange,rows=2,placeholder=""}) => (
   <div style={{display:"flex",flexDirection:"column",gap:6}}>
-    {label && <span style={{fontSize:11,color:C.text3,fontWeight:700,letterSpacing:0.5}}>{label}</span>}
+    {label && <span style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.4}}>{label}</span>}
     <textarea value={value} onChange={onChange} rows={rows} placeholder={placeholder}
-      style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 14px",fontSize:14,outline:"none",fontFamily:"inherit",resize:"vertical"}}/>
+      style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 14px",fontSize:14,outline:"none",fontFamily:FONT,resize:"vertical"}}/>
   </div>
 );
 
 const FSelect = ({label,value,onChange,options,style={}}) => (
   <div style={{display:"flex",flexDirection:"column",gap:6}}>
-    {label && <span style={{fontSize:11,color:C.text3,fontWeight:700,letterSpacing:0.5}}>{label}</span>}
-    <select value={value} onChange={onChange} style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 14px",fontSize:14,outline:"none",fontFamily:"inherit",...style}}>
+    {label && <span style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.4}}>{label}</span>}
+    <select value={value} onChange={onChange} style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 14px",fontSize:14,outline:"none",fontFamily:FONT,...style}}>
       {options.map(o => <option key={o.value??o} value={o.value??o}>{o.label??o}</option>)}
     </select>
   </div>
@@ -169,16 +232,26 @@ const PBar = ({value,max=100,color=C.gold,h=5}) => (
   </div>
 );
 
-const Badge = ({children,color}) => (
-  <span style={{background:color+"22",color,border:`1px solid ${color}40`,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{children}</span>
+const Badge = ({children,color,style={}}) => (
+  <span style={{background:color+"18",color,border:`1px solid ${color}30`,borderRadius:20,padding:"2px 8px",fontSize:10,fontWeight:600,whiteSpace:"nowrap",letterSpacing:0.2,...style}}>{children}</span>
+);
+
+const IconBtn = ({name,onClick,title,color=C.text3,size=16,style={}}) => (
+  <button onClick={onClick} title={title} style={{
+    background:"none",border:"none",cursor:"pointer",padding:6,color,fontFamily:FONT,
+    display:"inline-flex",alignItems:"center",justifyContent:"center",borderRadius:6,
+    transition:"all .15s",...style
+  }} onMouseEnter={e=>e.currentTarget.style.background=C.border} onMouseLeave={e=>e.currentTarget.style.background="none"}>
+    <Icon name={name} size={size}/>
+  </button>
 );
 
 const Modal = ({title,onClose,children,wide=false}) => (
-  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
-    <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxWidth:wide?780:640,maxHeight:"92vh",overflowY:"auto",border:`1px solid ${C.border2}`,borderBottom:"none"}} onClick={e=>e.stopPropagation()}>
+  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",backdropFilter:"blur(6px)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+    <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxWidth:wide?780:640,maxHeight:"92vh",overflowY:"auto",border:`1px solid ${C.border2}`,borderBottom:"none",fontFamily:FONT}} onClick={e=>e.stopPropagation()}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-        <span style={{fontWeight:800,fontSize:18}}>{title}</span>
-        <button onClick={onClose} style={{background:"none",border:"none",color:C.text3,fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
+        <span style={{fontWeight:700,fontSize:18,letterSpacing:-0.3}}>{title}</span>
+        <IconBtn name="x" onClick={onClose} size={18}/>
       </div>
       {children}
     </div>
@@ -195,14 +268,29 @@ const Sparkline = ({data,color=C.gold,h=50}) => {
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{width:"100%",height:h,overflow:"visible"}}>
       <defs>
         <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3"/>
+          <stop offset="0%" stopColor={color} stopOpacity="0.28"/>
           <stop offset="100%" stopColor={color} stopOpacity="0"/>
         </linearGradient>
       </defs>
       <polyline points={`0,${H} ${pts} ${W},${H}`} fill={`url(#${gid})`} stroke="none"/>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"/>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   );
+};
+
+const FilterChip = ({children,active,onClick,color}) => (
+  <button onClick={onClick} style={{
+    padding:"6px 12px",borderRadius:20,border:`1px solid ${active?(color||C.gold):C.border2}`,
+    background: active ? (color||C.gold)+"18" : "transparent",
+    color: active ? (color||C.gold) : C.text3,
+    fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:FONT,display:"inline-flex",alignItems:"center",gap:6
+  }}>{children}</button>
+);
+
+const navArrow = {
+  width:34,height:34,borderRadius:10,border:`1px solid ${C.border2}`,
+  background:C.card2,color:C.text2,cursor:"pointer",fontFamily:FONT,
+  display:"flex",alignItems:"center",justifyContent:"center"
 };
 
 // ─── LOGO ─────────────────────────────────────────────────────────────────────
@@ -231,13 +319,13 @@ const Logo = ({size=32}) => (
   </svg>
 );
 
-// ─── NAV ──────────────────────────────────────────────────────────────────────
+// ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
-  {id:"today",   e:"☀",  l:"Today"},
-  {id:"tasks",   e:"✓",  l:"Tasks"},
-  {id:"analyse", e:"📊", l:"Analytics"},
-  {id:"ai",      e:"✨", l:"Agent"},
-  {id:"me",      e:"◉",  l:"Me"},
+  {id:"today",   icon:"sun",          l:"Today"},
+  {id:"tasks",   icon:"listCheck",    l:"Tasks"},
+  {id:"analyse", icon:"bar",          l:"Analytics"},
+  {id:"ai",      icon:"sparkles",     l:"Agent"},
+  {id:"me",      icon:"user",         l:"Me"},
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -259,7 +347,6 @@ export default function App() {
 
   const ready = h_rdy && c_rdy && t_rdy && pr_rdy && b_rdy && w_rdy && j_rdy && p_rdy && sl_rdy && g_rdy && adk_rdy;
 
-  // Normalize habit cats on the fly
   const nHabits = useMemo(()=> (habits||[]).map(h => ({...h, cat: normCat(h.cat)})), [habits]);
 
   const score = useCallback((dk) => {
@@ -275,13 +362,11 @@ export default function App() {
     return {pct,done,total:applicable.length,nnOk:!nnBroken,nnDone,nnTotal:nn.length};
   }, [nHabits, completions]);
 
-  // Rolling habit rate since first completion — fixes "1/7=14%" bug
   const habitRate = useCallback((habit, windowDays=30, endKey=todayStr()) => {
     const id = habit.id;
     const firstDates = Object.keys(completions).filter(dk => completions[dk]?.[id]).sort();
-    if (!firstDates.length) return {rate: 0, done: 0, total: 0, firstSeen: null};
+    if (!firstDates.length) return {rate:0,done:0,total:0,firstSeen:null};
     const first = firstDates[0];
-    // Window = max(first, endKey-windowDays+1)
     const windowStart = addDays(endKey, -(windowDays-1));
     const start = first > windowStart ? first : windowStart;
     const totalDaysInRange = diffDays(start, endKey) + 1;
@@ -293,7 +378,7 @@ export default function App() {
       if (completions[dk]?.[id]) done++;
     }
     const rate = applicable ? Math.round((done / applicable) * 100) : 0;
-    return {rate, done, total: applicable, firstSeen: first};
+    return {rate, done, total:applicable, firstSeen:first};
   }, [completions]);
 
   const toggle = useCallback((id, dk) => {
@@ -302,10 +387,10 @@ export default function App() {
   }, [activeDayKey, setComp]);
 
   if (!ready) return (
-    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14,fontFamily:FONT}}>
       <Logo size={48}/>
-      <div style={{color:C.text3,fontSize:12,letterSpacing:2,fontWeight:700,marginTop:6}}>GROWTH</div>
-      <div style={{width:28,height:28,border:`2px solid ${C.gold}`,borderTopColor:"transparent",borderRadius:"50%",animation:"sp 1s linear infinite"}}/>
+      <div style={{color:C.text3,fontSize:11,letterSpacing:3,fontWeight:700,marginTop:4}}>GROWTH</div>
+      <div style={{width:24,height:24,border:`2px solid ${C.gold}`,borderTopColor:"transparent",borderRadius:"50%",animation:"sp 1s linear infinite"}}/>
       <style>{`@keyframes sp{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
@@ -323,42 +408,36 @@ export default function App() {
   return (
     <div className="growth-app">
       <aside className="growth-side">
-        <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 8px 18px"}}>
-          <Logo size={34}/>
-          <div>
-            <div style={{fontWeight:900,fontSize:18,letterSpacing:-0.5,lineHeight:1,color:C.text}}>Growth</div>
-            <div style={{fontSize:9,color:C.text4,fontWeight:700,letterSpacing:2}}>PERFORMANCE OS</div>
-          </div>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 8px 22px"}}>
+          <Logo size={32}/>
+          <div style={{fontWeight:800,fontSize:19,letterSpacing:-0.6,color:C.text}}>Growth</div>
         </div>
         {TABS.map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} className="growth-side-tab" style={{
-            background: tab===t.id ? `linear-gradient(90deg, ${C.gold}22, transparent)` : "transparent",
+            background: tab===t.id ? `linear-gradient(90deg, ${C.gold}16, transparent)` : "transparent",
             color: tab===t.id ? C.gold : C.text2,
             borderLeft: tab===t.id ? `2px solid ${C.gold}` : "2px solid transparent",
           }}>
-            <span style={{fontSize:16,width:20,textAlign:"center"}}>{t.e}</span>
-            <span style={{fontSize:13,fontWeight:600}}>{t.l}</span>
+            <Icon name={t.icon} size={17}/>
+            <span style={{fontSize:13,fontWeight:500,letterSpacing:-0.1}}>{t.l}</span>
           </button>
         ))}
         <div style={{flex:1}}/>
         <div style={{padding:"12px 10px",fontSize:11,color:C.text4,borderTop:`1px solid ${C.border}`}}>
-          <div style={{marginBottom:4}}>Score du jour</div>
-          <div style={{fontSize:22,fontWeight:900,color:todayScore.nnOk?C.gold:C.red}}>{todayScore.pct}%</div>
+          <div style={{marginBottom:4,fontWeight:500}}>Score du jour</div>
+          <div style={{fontSize:24,fontWeight:800,color:todayScore.nnOk?C.gold:C.red,letterSpacing:-0.5}}>{todayScore.pct}%</div>
         </div>
       </aside>
 
       <div className="growth-column">
         <header className="growth-header">
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div className="growth-header-logo"><Logo size={30}/></div>
-            <div>
-              <div style={{fontWeight:900,fontSize:16,letterSpacing:-0.5,lineHeight:1}}>Growth</div>
-              <div style={{fontSize:9,color:C.text4,fontWeight:700,letterSpacing:2}}>PERFORMANCE OS</div>
-            </div>
+            <Logo size={28}/>
+            <div style={{fontWeight:800,fontSize:17,letterSpacing:-0.5}}>Growth</div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:24,fontWeight:900,color:todayScore.nnOk?C.gold:C.red,lineHeight:1}}>{todayScore.pct}%</div>
-            <div style={{fontSize:10,color:C.text4}}>{todayScore.done}/{todayScore.total} today</div>
+            <div style={{fontSize:22,fontWeight:800,color:todayScore.nnOk?C.gold:C.red,lineHeight:1,letterSpacing:-0.5}}>{todayScore.pct}%</div>
+            <div style={{fontSize:10,color:C.text4,marginTop:2,fontWeight:500}}>{todayScore.done}/{todayScore.total} today</div>
           </div>
         </header>
 
@@ -372,9 +451,9 @@ export default function App() {
 
         <nav className="growth-bottom">
           {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"4px 10px",color:tab===t.id?C.gold:C.text4,transition:"color .2s"}}>
-              <span style={{fontSize:18,opacity:tab===t.id?1:0.55}}>{t.e}</span>
-              <span style={{fontSize:9,fontWeight:700,letterSpacing:0.5}}>{t.l.toUpperCase()}</span>
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 10px",color:tab===t.id?C.gold:C.text4,transition:"color .2s",fontFamily:FONT}}>
+              <Icon name={t.icon} size={18}/>
+              <span style={{fontSize:9,fontWeight:600,letterSpacing:0.4}}>{t.l.toUpperCase()}</span>
             </button>
           ))}
         </nav>
@@ -382,22 +461,22 @@ export default function App() {
 
       <style>{`
         *{box-sizing:border-box}
-        body{margin:0;background:${C.bg}}
-        input,select,textarea{font-family:inherit}
+        html,body{margin:0;background:${C.bg};font-family:${FONT};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+        input,select,textarea,button{font-family:${FONT}}
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-thumb{background:${C.border2};border-radius:99px}
         input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:99px;outline:none;background:${C.border2}}
         input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;cursor:pointer;background:${C.gold}}
         input[type=date],input[type=time]{color-scheme:dark}
+        input:focus,select:focus,textarea:focus{border-color:${C.gold}!important}
         button:hover:not(:disabled){filter:brightness(1.08)}
 
-        .growth-app{min-height:100vh;background:${C.bg};color:${C.text};font-family:'Inter',-apple-system,sans-serif;display:flex}
-        .growth-side{display:none;width:230px;flex-direction:column;padding:18px 14px;border-right:1px solid ${C.border};position:sticky;top:0;height:100vh}
-        .growth-side-tab{display:flex;align-items:center;gap:12px;padding:11px 12px;margin-bottom:2px;border:none;background:none;cursor:pointer;border-radius:10px;text-align:left;font-family:inherit}
+        .growth-app{min-height:100vh;background:${C.bg};color:${C.text};font-family:${FONT};display:flex;letter-spacing:-0.1px}
+        .growth-side{display:none;width:220px;flex-direction:column;padding:18px 12px;border-right:1px solid ${C.border};position:sticky;top:0;height:100vh}
+        .growth-side-tab{display:flex;align-items:center;gap:12px;padding:10px 12px;margin-bottom:2px;border:none;background:none;cursor:pointer;border-radius:10px;text-align:left;font-family:${FONT}}
         .growth-column{flex:1;display:flex;flex-direction:column;min-width:0;max-width:100%}
-        .growth-header{padding:14px 20px 10px;border-bottom:1px solid ${C.border};display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:${C.bg};z-index:100}
-        .growth-header-logo{display:block}
-        .growth-main{flex:1;padding:20px 18px 12px;overflow-y:auto;max-width:920px;width:100%;margin:0 auto}
+        .growth-header{padding:14px 20px 10px;border-bottom:1px solid ${C.border};display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:${C.bg};z-index:100;backdrop-filter:blur(8px)}
+        .growth-main{flex:1;padding:20px 18px 14px;overflow-y:auto;max-width:920px;width:100%;margin:0 auto}
         .growth-bottom{border-top:1px solid ${C.border};background:${C.bg};position:sticky;bottom:0;z-index:100;display:flex;justify-content:space-around;padding:8px 0 14px}
 
         @media (min-width: 980px) {
@@ -416,25 +495,22 @@ export default function App() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TODAY
 // ═══════════════════════════════════════════════════════════════════════════════
-function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,body,setBody,journal,setJournal,tasks,workSess}) {
+function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,body,setBody,journal,setJournal,tasks,setTasks,workSess}) {
   const [viewDay, setViewDay] = useState(activeDayKey);
   useEffect(()=>{ setViewDay(activeDayKey); }, [activeDayKey]);
 
   const [closeModal, setCloseModal] = useState(false);
-  const [wakeTime, setWakeTime] = useState("");
-  const [bedTime, setBedTime] = useState("");
-  const [sleepH, setSleepH] = useState("");
   const [gratitude, setGratitude] = useState("");
   const [win, setWin] = useState("");
   const [collapsed, setCollapsed] = useState({});
 
+  const dayBody = body[viewDay] || {};
   const isActive = viewDay === activeDayKey;
   const isFuture = viewDay > todayStr();
   const todayComp = completions[viewDay] || {};
   const sc = score(viewDay);
   const workMin = workSess.filter(s=>s.date===viewDay).reduce((a,b)=>a+(b.duration||0),0);
-  const todayTasks = tasks.filter(t=>!t.done && t.scheduledFor===viewDay);
-  const dayBody = body[viewDay] || {};
+  const dayTasks = tasks.filter(t=>t.scheduledFor===viewDay);
 
   const byCategory = habits.reduce((acc,h) => {
     if (!isApplicable(h, viewDay)) return acc;
@@ -452,92 +528,162 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
     return `Dans ${-d} jours`;
   };
 
+  const updateBody = (patch) => setBody(prev => ({
+    ...prev,
+    [viewDay]: {...(prev[viewDay]||{}), ...patch}
+  }));
+
+  const handleSetWake = (v) => {
+    const patch = {wakeTime: v};
+    const sleep = calcSleep(dayBody.bedTime, v);
+    if (sleep !== null) patch.sleep = sleep;
+    updateBody(patch);
+  };
+  const handleSetBed = (v) => {
+    const patch = {bedTime: v};
+    const sleep = calcSleep(v, dayBody.wakeTime);
+    if (sleep !== null) patch.sleep = sleep;
+    updateBody(patch);
+  };
+
   const handleClose = () => {
-    if (wakeTime || bedTime || sleepH)
-      setBody(prev => ({...prev, [activeDayKey]: {
-        ...(prev[activeDayKey]||{}),
-        ...(wakeTime?{wakeTime}:{}),
-        ...(bedTime?{bedTime}:{}),
-        ...(sleepH?{sleep:parseFloat(sleepH)}:{})
-      }}));
     if (gratitude || win)
       setJournal(prev=>({...prev,[activeDayKey]:{...(prev[activeDayKey]||{}),gratitude,win}}));
     const next = addDays(activeDayKey, 1);
     setActiveDayKey(next);
     setCloseModal(false);
-    setWakeTime(""); setSleepH(""); setBedTime(""); setGratitude(""); setWin("");
+    setGratitude(""); setWin("");
   };
 
   const toggleCat = c => setCollapsed(p => ({...p, [c]: !p[c]}));
+  const toggleTask = (id) => setTasks(p => (p||[]).map(t => t.id===id ? {...t, done:!t.done} : t));
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
-      {/* Header with date navigation */}
+      {/* Date nav */}
       <Card style={{padding:"14px 16px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-          <button onClick={()=>setViewDay(addDays(viewDay,-1))} style={navArrow}>‹</button>
+          <button onClick={()=>setViewDay(addDays(viewDay,-1))} style={navArrow}><Icon name="chevL" size={18}/></button>
           <div style={{textAlign:"center",flex:1,minWidth:0}}>
-            <div style={{fontWeight:800,fontSize:17,lineHeight:1.1,textTransform:"capitalize"}}>{relativeLabel()}</div>
+            <div style={{fontWeight:700,fontSize:17,lineHeight:1.1,textTransform:"capitalize",letterSpacing:-0.3}}>{relativeLabel()}</div>
             <div style={{fontSize:11,color:C.text3,marginTop:3,textTransform:"capitalize"}}>{fmtDate(viewDay)}</div>
           </div>
-          <button onClick={()=>setViewDay(addDays(viewDay,1))} style={navArrow} disabled={isFuture}>›</button>
+          <button onClick={()=>setViewDay(addDays(viewDay,1))} style={{...navArrow,opacity:isFuture?0.4:1}} disabled={isFuture}><Icon name="chevR" size={18}/></button>
         </div>
         {!isActive && (
           <div style={{display:"flex",justifyContent:"center",marginTop:10}}>
-            <Btn onClick={()=>setViewDay(activeDayKey)} variant="outline" style={{padding:"6px 14px",fontSize:12}}>↩ Revenir au jour actif</Btn>
+            <Btn onClick={()=>setViewDay(activeDayKey)} variant="outline" style={{padding:"6px 12px",fontSize:12}}>
+              <Icon name="rotate" size={14}/> Revenir au jour actif
+            </Btn>
           </div>
         )}
+      </Card>
+
+      {/* Sleep inputs */}
+      <Card>
+        <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.8,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+          <Icon name="moon" size={12}/> SOMMEIL
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          <div>
+            <div style={{fontSize:10,color:C.text4,fontWeight:500,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>
+              <Icon name="bed" size={11}/> Coucher
+            </div>
+            <input type="time" value={dayBody.bedTime||""} onChange={e=>handleSetBed(e.target.value)}
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,padding:"8px 10px",fontSize:13,outline:"none",fontFamily:FONT,width:"100%"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:10,color:C.text4,fontWeight:500,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>
+              <Icon name="sunrise" size={11}/> Réveil
+            </div>
+            <input type="time" value={dayBody.wakeTime||""} onChange={e=>handleSetWake(e.target.value)}
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,padding:"8px 10px",fontSize:13,outline:"none",fontFamily:FONT,width:"100%"}}/>
+          </div>
+          <div style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,padding:"6px 10px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+            <div style={{fontSize:10,color:C.text4,fontWeight:500}}>Durée</div>
+            <div style={{fontSize:18,fontWeight:700,color:dayBody.sleep?C.green:C.text4,letterSpacing:-0.5}}>
+              {dayBody.sleep ? `${dayBody.sleep}h` : "—"}
+            </div>
+          </div>
+        </div>
       </Card>
 
       {/* Score stats */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Card style={{padding:14,textAlign:"center"}}>
-          <div style={{fontSize:30,fontWeight:900,color:sc.nnOk?C.gold:C.red,lineHeight:1}}>{sc.pct}%</div>
-          <div style={{fontSize:10,color:C.text4,fontWeight:700,letterSpacing:1,marginTop:4}}>SCORE · {sc.done}/{sc.total}</div>
+          <div style={{fontSize:30,fontWeight:800,color:sc.nnOk?C.gold:C.red,lineHeight:1,letterSpacing:-1}}>{sc.pct}%</div>
+          <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.5,marginTop:6}}>SCORE · {sc.done}/{sc.total}</div>
         </Card>
         <Card style={{padding:14,textAlign:"center",border:`1px solid ${sc.nnOk?C.border:C.red+"40"}`}}>
-          <div style={{fontSize:30,fontWeight:900,color:sc.nnOk?C.green:C.red,lineHeight:1}}>{sc.nnDone}/{sc.nnTotal}</div>
-          <div style={{fontSize:10,color:C.text4,fontWeight:700,letterSpacing:1,marginTop:4}}>NON-NÉGOCIABLES</div>
+          <div style={{fontSize:30,fontWeight:800,color:sc.nnOk?C.green:C.red,lineHeight:1,letterSpacing:-1}}>{sc.nnDone}/{sc.nnTotal}</div>
+          <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.5,marginTop:6}}>NON-NÉGOCIABLES</div>
         </Card>
       </div>
 
       {!sc.nnOk && (
-        <div style={{background:"rgba(239,68,68,0.08)",border:`1px solid ${C.red}40`,borderRadius:12,padding:"10px 14px",fontSize:12,color:C.red,fontWeight:600}}>
-          ⚠ Standard brisé — score plafonné à 70%
+        <div style={{background:"rgba(229,72,77,0.08)",border:`1px solid ${C.red}30`,borderRadius:12,padding:"10px 14px",fontSize:12,color:C.red,fontWeight:500,display:"flex",alignItems:"center",gap:8}}>
+          <Icon name="alert" size={14}/> Standard brisé — score plafonné à 70%
         </div>
       )}
 
-      {(workMin>0||todayTasks.length>0||dayBody.sleep) && (
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(120px, 1fr))",gap:8}}>
-          {workMin>0 && <Card style={{padding:12,textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:C.blue}}>{fmtMin(workMin)}</div><div style={{fontSize:10,color:C.text4}}>Focus</div></Card>}
-          {todayTasks.length>0 && <Card style={{padding:12,textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:C.red}}>{todayTasks.length}</div><div style={{fontSize:10,color:C.text4}}>Tâches du jour</div></Card>}
-          {dayBody.sleep && <Card style={{padding:12,textAlign:"center"}}><div style={{fontSize:18,fontWeight:800,color:C.purple}}>{dayBody.sleep}h</div><div style={{fontSize:10,color:C.text4}}>Sommeil</div></Card>}
-        </div>
+      {workMin > 0 && (
+        <Card style={{padding:12,textAlign:"center"}}>
+          <div style={{fontSize:18,fontWeight:700,color:C.gold,letterSpacing:-0.4}}>{fmtMin(workMin)}</div>
+          <div style={{fontSize:10,color:C.text4,fontWeight:500,marginTop:2}}>Focus aujourd'hui</div>
+        </Card>
       )}
 
-      {/* Categories */}
+      {/* Today's tasks */}
+      {dayTasks.length > 0 && (
+        <Card>
+          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.8,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+            <Icon name="listCheck" size={12}/> TÂCHES DU JOUR · {dayTasks.filter(t=>!t.done).length}/{dayTasks.length}
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:7}}>
+            {dayTasks.map(t => {
+              const p = PRIORITY[normPrio(t.priority||t.urgency)];
+              return (
+                <button key={t.id} onClick={()=>toggleTask(t.id)} style={{
+                  display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
+                  background:t.done?C.bg2:C.card2,
+                  border:`1px solid ${t.done?C.border:C.border2}`,
+                  borderRadius:10,cursor:"pointer",color:C.text,fontFamily:FONT,textAlign:"left"
+                }}>
+                  <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${t.done?C.green:p.color}`,background:t.done?C.green:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    {t.done && <Icon name="check" size={11} color="#001a10" stroke={3}/>}
+                  </div>
+                  <span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:t.done?"line-through":"none",color:t.done?C.text3:C.text}}>{t.title}</span>
+                  {t.project && <Badge color={C.text3}>{t.project}</Badge>}
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Habit categories */}
       {Object.entries(byCategory).map(([cat,hs])=>{
-        const c = CATS[cat]||{color:"#888",emoji:"•"};
+        const c = CATS[cat]||{color:C.text3,icon:"check"};
         const done = hs.filter(h=>todayComp[h.id]).length;
         const isCollapsed = !!collapsed[cat];
         return (
           <Card key={cat} style={{padding:14}}>
-            <button onClick={()=>toggleCat(cat)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",color:C.text,fontFamily:"inherit",marginBottom:isCollapsed?0:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:15}}>{c.emoji}</span>
-                <span style={{fontSize:12,fontWeight:700,color:c.color,letterSpacing:0.8}}>{cat.toUpperCase()}</span>
-                <span style={{fontSize:11,color:C.text4,marginLeft:4}}>{done}/{hs.length}</span>
+            <button onClick={()=>toggleCat(cat)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",color:C.text,fontFamily:FONT,marginBottom:isCollapsed?0:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <Icon name={c.icon} size={16} color={c.color}/>
+                <span style={{fontSize:12,fontWeight:700,color:c.color,letterSpacing:0.6}}>{cat.toUpperCase()}</span>
+                <span style={{fontSize:11,color:C.text4,marginLeft:2,fontWeight:500}}>{done}/{hs.length}</span>
               </div>
-              <span style={{color:C.text3,fontSize:14,transform:isCollapsed?"rotate(-90deg)":"none",transition:"transform .2s"}}>⌄</span>
+              <Icon name="chevD" size={14} color={C.text3} style={{transform:isCollapsed?"rotate(-90deg)":"none",transition:"transform .2s"}}/>
             </button>
             {!isCollapsed && (
               <div style={{display:"flex",flexDirection:"column",gap:7}}>
                 {hs.map(h=>{
                   const checked = !!todayComp[h.id];
                   return (
-                    <button key={h.id} onClick={()=>toggle(h.id, viewDay)} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:checked?c.color+"14":C.card2,border:`1px solid ${checked?c.color+"50":C.border}`,borderRadius:11,cursor:"pointer",color:C.text,transition:"all .15s",textAlign:"left",fontFamily:"inherit"}}>
+                    <button key={h.id} onClick={()=>toggle(h.id, viewDay)} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:checked?c.color+"12":C.card2,border:`1px solid ${checked?c.color+"40":C.border}`,borderRadius:10,cursor:"pointer",color:C.text,transition:"all .15s",textAlign:"left",fontFamily:FONT}}>
                       <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${checked?c.color:C.border2}`,background:checked?c.color:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        {checked && <span style={{fontSize:11,color:"#000",fontWeight:900}}>✓</span>}
+                        {checked && <Icon name="check" size={12} color="#0a0a0a" stroke={3}/>}
                       </div>
                       <span style={{flex:1,fontSize:14,fontWeight:500,textDecoration:checked?"line-through":"none",color:checked?C.text3:C.text}}>{h.label}</span>
                       {h.nn && <Badge color={C.red}>NN</Badge>}
@@ -550,25 +696,9 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         );
       })}
 
-      {todayTasks.length>0 && (
-        <Card>
-          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:1,marginBottom:10}}>TÂCHES DU JOUR</div>
-          {todayTasks.map(t=>{
-            const p = PRIORITY[normPrio(t.urgency||t.priority)];
-            return (
-              <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:p.color,flexShrink:0}}/>
-                <span style={{flex:1,fontWeight:500}}>{t.title}</span>
-                {t.project && <Badge color={C.blue}>{t.project}</Badge>}
-              </div>
-            );
-          })}
-        </Card>
-      )}
-
       {isActive && (
-        <button onClick={()=>setCloseModal(true)} style={{background:`linear-gradient(135deg, ${C.gold}, ${C.goldD})`,color:"#000",border:"none",borderRadius:14,padding:"15px",fontSize:15,fontWeight:800,cursor:"pointer",width:"100%",marginTop:4,fontFamily:"inherit",boxShadow:"0 8px 24px -10px rgba(245,192,86,0.4)"}}>
-          Clôturer ma journée 🌙
+        <button onClick={()=>setCloseModal(true)} style={{background:`linear-gradient(135deg, ${C.gold}, ${C.goldD})`,color:"#0a0a0a",border:"none",borderRadius:14,padding:"15px",fontSize:14,fontWeight:700,cursor:"pointer",width:"100%",marginTop:4,fontFamily:FONT,boxShadow:"0 8px 24px -10px rgba(245,192,86,0.35)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-0.2}}>
+          <Icon name="moon" size={15}/> Clôturer ma journée
         </button>
       )}
 
@@ -576,17 +706,13 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         <Modal title="Clôture de journée" onClose={()=>setCloseModal(false)}>
           <div style={{display:"flex",flexDirection:"column",gap:14}}>
             <div style={{background:C.bg2,borderRadius:12,padding:14,textAlign:"center"}}>
-              <div style={{fontSize:13,color:C.text3,marginBottom:4}}>Score du jour</div>
-              <div style={{fontSize:40,fontWeight:900,color:sc.nnOk?C.gold:C.red}}>{sc.pct}%</div>
+              <div style={{fontSize:12,color:C.text3,marginBottom:4,fontWeight:500}}>Score du jour</div>
+              <div style={{fontSize:40,fontWeight:800,color:sc.nnOk?C.gold:C.red,letterSpacing:-1.5}}>{sc.pct}%</div>
+              {dayBody.sleep && <div style={{fontSize:12,color:C.text3,marginTop:6}}>Sommeil: <b style={{color:C.green}}>{dayBody.sleep}h</b></div>}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <FInput label="⏰ Heure de réveil" value={wakeTime} onChange={e=>setWakeTime(e.target.value)} type="time"/>
-              <FInput label="🛏 Heure de coucher" value={bedTime} onChange={e=>setBedTime(e.target.value)} type="time"/>
-            </div>
-            <FInput label="😴 Durée sommeil (heures)" value={sleepH} onChange={e=>setSleepH(e.target.value)} type="number" placeholder="7.5"/>
-            <FText label="🙏 Gratitudes" value={gratitude} onChange={e=>setGratitude(e.target.value)} placeholder="Je suis reconnaissant pour..."/>
-            <FInput label="⭐ Victoire du jour" value={win} onChange={e=>setWin(e.target.value)} placeholder="Ma plus grande victoire..."/>
-            <Btn onClick={handleClose} style={{width:"100%",padding:"14px",fontSize:15}}>Confirmer & ouvrir demain →</Btn>
+            <FText label="GRATITUDES" value={gratitude} onChange={e=>setGratitude(e.target.value)} placeholder="Je suis reconnaissant pour..."/>
+            <FInput label="VICTOIRE DU JOUR" value={win} onChange={e=>setWin(e.target.value)} placeholder="Ma plus grande victoire..."/>
+            <Btn onClick={handleClose} style={{width:"100%",padding:"14px",fontSize:14}}>Confirmer & ouvrir demain →</Btn>
           </div>
         </Modal>
       )}
@@ -594,21 +720,15 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
   );
 }
 
-const navArrow = {
-  width:34,height:34,borderRadius:10,border:`1px solid ${C.border2}`,
-  background:C.card2,color:C.text2,fontSize:22,cursor:"pointer",fontFamily:"inherit",lineHeight:1,
-  display:"flex",alignItems:"center",justifyContent:"center"
-};
-
 // ═══════════════════════════════════════════════════════════════════════════════
-// TASKS (new dedicated tab)
+// TASKS
 // ═══════════════════════════════════════════════════════════════════════════════
 function TasksTab({tasks,setTasks,projects,setProjects}) {
   const [form, setForm] = useState(null);
   const [editTask, setEditTask] = useState(null);
   const [projectForm, setProjectForm] = useState(false);
   const [newProject, setNewProject] = useState("");
-  const [filter, setFilter] = useState("all"); // all | project name | done
+  const [filter, setFilter] = useState("all");
   const [showDone, setShowDone] = useState(false);
 
   const empty = {title:"",priority:"medium",project:"",scheduledFor:"",notes:""};
@@ -622,6 +742,10 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
       setTasks(p => [...(p||[]), {...d, id:Date.now().toString(), done:false, createdAt:todayStr(), priority:normPrio(d.priority)}]);
     }
     setForm(null); setEditTask(null); setD(empty);
+  };
+
+  const assignToToday = (id) => {
+    setTasks(p => (p||[]).map(t => t.id===id ? {...t, scheduledFor: todayStr()} : t));
   };
 
   const addProject = () => {
@@ -658,19 +782,19 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <div>
-          <div style={{fontWeight:800,fontSize:22,lineHeight:1}}>Tâches</div>
-          <div style={{fontSize:12,color:C.text3,marginTop:2}}>{active.length} actives · {done.length} terminées</div>
+          <div style={{fontWeight:700,fontSize:22,lineHeight:1,letterSpacing:-0.5}}>Tâches</div>
+          <div style={{fontSize:12,color:C.text3,marginTop:4}}>{active.length} actives · {done.length} terminées</div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <Btn onClick={()=>{setD(empty);setEditTask(null);setForm("new");}} style={{padding:"8px 14px"}}>+ Tâche</Btn>
-          <Btn onClick={()=>setProjectForm(true)} variant="ghost" style={{padding:"8px 14px"}}>+ Projet</Btn>
+          <Btn onClick={()=>{setD(empty);setEditTask(null);setForm("new");}} style={{padding:"8px 14px"}}><Icon name="plus" size={14}/> Tâche</Btn>
+          <Btn onClick={()=>setProjectForm(true)} variant="ghost" style={{padding:"8px 14px"}}><Icon name="plus" size={14}/> Projet</Btn>
         </div>
       </div>
 
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
         <FilterChip active={filter==="all"} onClick={()=>setFilter("all")}>Toutes</FilterChip>
         {allProjects.map(p =>
-          <FilterChip key={p} active={filter===p} color={C.blue} onClick={()=>setFilter(p)}>{p}</FilterChip>
+          <FilterChip key={p} active={filter===p} color={C.gold} onClick={()=>setFilter(p)}>{p}</FilterChip>
         )}
         <div style={{flex:1}}/>
         <FilterChip active={showDone} onClick={()=>setShowDone(x=>!x)} color={C.green}>{showDone?"Terminées":"Actives"}</FilterChip>
@@ -678,7 +802,7 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
 
       {displayed.length === 0 && (
         <Card style={{padding:30,textAlign:"center",color:C.text3}}>
-          <div style={{fontSize:36,marginBottom:8,opacity:0.4}}>✓</div>
+          <Icon name="checkCircle" size={32} color={C.text4} style={{marginBottom:10}}/>
           <div style={{fontSize:14,fontWeight:600}}>{showDone?"Aucune tâche terminée":"Aucune tâche active"}</div>
           <div style={{fontSize:12,color:C.text4,marginTop:4}}>Ajoute ta première tâche pour commencer</div>
         </Card>
@@ -686,38 +810,38 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
 
       {byProject ? Object.entries(byProject).map(([proj, ts])=>(
         <div key={proj}>
-          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:1,marginBottom:8,padding:"0 4px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:8,padding:"0 4px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span>{proj === "Sans projet" ? "SANS PROJET" : proj.toUpperCase()} · {ts.length}</span>
             {proj !== "Sans projet" && projects.includes(proj) && (
-              <button onClick={()=>removeProject(proj)} style={{background:"none",border:"none",color:C.text4,fontSize:11,cursor:"pointer"}}>supprimer projet</button>
+              <button onClick={()=>removeProject(proj)} style={{background:"none",border:"none",color:C.text4,fontSize:11,cursor:"pointer",fontFamily:FONT}}>supprimer projet</button>
             )}
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {ts.map(t => <TaskCard key={t.id} task={t} setTasks={setTasks} onEdit={()=>{setD({title:t.title,priority:normPrio(t.priority||t.urgency),project:t.project||"",scheduledFor:t.scheduledFor||"",notes:t.notes||""});setEditTask(t);setForm("edit");}}/>)}
+            {ts.map(t => <TaskCard key={t.id} task={t} setTasks={setTasks} onAssignToday={()=>assignToToday(t.id)} onEdit={()=>{setD({title:t.title,priority:normPrio(t.priority||t.urgency),project:t.project||"",scheduledFor:t.scheduledFor||"",notes:t.notes||""});setEditTask(t);setForm("edit");}}/>)}
           </div>
         </div>
       )) : (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {displayed.map(t => <TaskCard key={t.id} task={t} setTasks={setTasks} onEdit={()=>{setD({title:t.title,priority:normPrio(t.priority||t.urgency),project:t.project||"",scheduledFor:t.scheduledFor||"",notes:t.notes||""});setEditTask(t);setForm("edit");}}/>)}
+          {displayed.map(t => <TaskCard key={t.id} task={t} setTasks={setTasks} onAssignToday={()=>assignToToday(t.id)} onEdit={()=>{setD({title:t.title,priority:normPrio(t.priority||t.urgency),project:t.project||"",scheduledFor:t.scheduledFor||"",notes:t.notes||""});setEditTask(t);setForm("edit");}}/>)}
         </div>
       )}
 
       {form && (
         <Modal title={editTask?"Modifier la tâche":"Nouvelle tâche"} onClose={()=>{setForm(null);setEditTask(null);}}>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <FInput label="Titre *" value={d.title} onChange={e=>setD(p=>({...p,title:e.target.value}))} placeholder="Que faut-il faire ?"/>
+            <FInput label="TITRE *" value={d.title} onChange={e=>setD(p=>({...p,title:e.target.value}))} placeholder="Que faut-il faire ?"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <FSelect label="Priorité" value={d.priority} onChange={e=>setD(p=>({...p,priority:e.target.value}))} options={Object.entries(PRIORITY).map(([k,v])=>({value:k,label:v.label}))}/>
-              <FSelect label="Projet" value={d.project} onChange={e=>setD(p=>({...p,project:e.target.value}))} options={[{value:"",label:"— Aucun —"},...allProjects.map(p=>({value:p,label:p}))]}/>
+              <FSelect label="PRIORITÉ" value={d.priority} onChange={e=>setD(p=>({...p,priority:e.target.value}))} options={Object.entries(PRIORITY).map(([k,v])=>({value:k,label:v.label}))}/>
+              <FSelect label="PROJET" value={d.project} onChange={e=>setD(p=>({...p,project:e.target.value}))} options={[{value:"",label:"— Aucun —"},...allProjects.map(p=>({value:p,label:p}))]}/>
             </div>
-            <FInput label="Échéance (optionnel)" value={d.scheduledFor} onChange={e=>setD(p=>({...p,scheduledFor:e.target.value}))} type="date"/>
-            <FText label="Notes" value={d.notes} onChange={e=>setD(p=>({...p,notes:e.target.value}))}/>
+            <FInput label="ÉCHÉANCE" value={d.scheduledFor} onChange={e=>setD(p=>({...p,scheduledFor:e.target.value}))} type="date"/>
+            <FText label="NOTES" value={d.notes} onChange={e=>setD(p=>({...p,notes:e.target.value}))}/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>{setForm(null);setEditTask(null);}} variant="ghost" style={{flex:1}}>Annuler</Btn>
               <Btn onClick={save} style={{flex:2}}>Enregistrer</Btn>
             </div>
             {editTask && (
-              <Btn onClick={()=>{setTasks(p=>p.filter(x=>x.id!==editTask.id));setForm(null);setEditTask(null);}} variant="danger" style={{width:"100%"}}>Supprimer la tâche</Btn>
+              <Btn onClick={()=>{setTasks(p=>p.filter(x=>x.id!==editTask.id));setForm(null);setEditTask(null);}} variant="danger" style={{width:"100%"}}><Icon name="trash" size={14}/> Supprimer la tâche</Btn>
             )}
           </div>
         </Modal>
@@ -726,7 +850,7 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
       {projectForm && (
         <Modal title="Nouveau projet" onClose={()=>setProjectForm(false)}>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <FInput label="Nom du projet" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="Agency 5Stars, Visa Focus..."/>
+            <FInput label="NOM DU PROJET" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="Agency 5Stars, Visa Focus..."/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>setProjectForm(false)} variant="ghost" style={{flex:1}}>Annuler</Btn>
               <Btn onClick={addProject} style={{flex:2}}>Créer le projet</Btn>
@@ -738,18 +862,10 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
   );
 }
 
-const FilterChip = ({children,active,onClick,color}) => (
-  <button onClick={onClick} style={{
-    padding:"6px 12px",borderRadius:20,border:`1px solid ${active?(color||C.gold):C.border2}`,
-    background: active ? (color||C.gold)+"22" : "transparent",
-    color: active ? (color||C.gold) : C.text3,
-    fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"
-  }}>{children}</button>
-);
-
-const TaskCard = ({task,setTasks,onEdit}) => {
+const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
   const p = PRIORITY[normPrio(task.priority||task.urgency)];
   const due = task.scheduledFor;
+  const isToday = due === todayStr();
   const isOverdue = due && due < todayStr() && !task.done;
   return (
     <Card style={{padding:12}}>
@@ -757,29 +873,34 @@ const TaskCard = ({task,setTasks,onEdit}) => {
         <button onClick={()=>setTasks(ts=>ts.map(t=>t.id===task.id?{...t,done:!t.done}:t))} style={{
           width:20,height:20,borderRadius:6,border:`2px solid ${task.done?C.green:p.color}`,
           background:task.done?C.green:"transparent",cursor:"pointer",flexShrink:0,marginTop:2,
-          display:"flex",alignItems:"center",justifyContent:"center"
+          display:"flex",alignItems:"center",justifyContent:"center",padding:0
         }}>
-          {task.done && <span style={{fontSize:11,color:"#000",fontWeight:900}}>✓</span>}
+          {task.done && <Icon name="check" size={11} color="#001a10" stroke={3}/>}
         </button>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:600,fontSize:14,textDecoration:task.done?"line-through":"none",color:task.done?C.text3:C.text}}>{task.title}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:5}}>
+          <div style={{fontWeight:500,fontSize:14,textDecoration:task.done?"line-through":"none",color:task.done?C.text3:C.text}}>{task.title}</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:5,alignItems:"center"}}>
             <Badge color={p.color}>{p.label}</Badge>
-            {task.project && <Badge color={C.blue}>{task.project}</Badge>}
-            {due && <Badge color={isOverdue?C.red:C.text3}>📅 {fmtShort(due)}</Badge>}
+            {task.project && <Badge color={C.gold}>{task.project}</Badge>}
+            {due && (
+              <span style={{fontSize:10,color:isOverdue?C.red:isToday?C.green:C.text4,fontWeight:600,display:"inline-flex",alignItems:"center",gap:3}}>
+                <Icon name="calendar" size={10}/> {fmtShort(due)}
+              </span>
+            )}
           </div>
           {task.notes && <div style={{fontSize:12,color:C.text3,marginTop:6}}>{task.notes}</div>}
         </div>
-        <div style={{display:"flex",gap:2}}>
-          <button onClick={onEdit} style={iconBtn}>✏</button>
-          <button onClick={()=>setTasks(p=>p.filter(x=>x.id!==task.id))} style={iconBtn}>🗑</button>
+        <div style={{display:"flex",gap:1,flexShrink:0}}>
+          {!isToday && !task.done && (
+            <IconBtn name="calendarPlus" onClick={onAssignToday} title="Ajouter à aujourd'hui" color={C.gold}/>
+          )}
+          <IconBtn name="edit" onClick={onEdit} title="Modifier"/>
+          <IconBtn name="trash" onClick={()=>setTasks(p=>p.filter(x=>x.id!==task.id))} title="Supprimer"/>
         </div>
       </div>
     </Card>
   );
 };
-
-const iconBtn = {background:"none",border:"none",cursor:"pointer",fontSize:14,padding:4,color:C.text3,fontFamily:"inherit"};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ANALYTICS
@@ -794,29 +915,25 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
   const scores = days.map(d=>({d,...score(d)}));
   const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b.pct,0)/scores.length) : 0;
 
-  // Previous window for comparison
   const prevDays = Array.from({length:nDays},(_,i)=>addDays(todayStr(),-(nDays*2-1-i)));
   const prevAvg = Math.round(prevDays.map(d=>score(d).pct).reduce((a,b)=>a+b,0)/nDays);
   const diff = avg - prevAvg;
 
-  // Fixed habit rate using rolling since first completion
   const habitRates = useMemo(()=> habits.map(h => ({...h, ...habitRate(h, 30)})).sort((a,b)=>b.rate-a.rate), [habits, habitRate]);
-
   const filtered = filter==="all" ? habitRates : habitRates.filter(h=>h.cat===filter);
 
   const catAvg = Object.keys(CATS).map(cat => {
     const hs = habitRates.filter(h=>h.cat===cat && h.firstSeen);
-    return {cat, avg: hs.length?Math.round(hs.reduce((a,b)=>a+b.rate,0)/hs.length):0, color:CATS[cat].color, emoji:CATS[cat].emoji};
+    return {cat, avg:hs.length?Math.round(hs.reduce((a,b)=>a+b.rate,0)/hs.length):0, color:CATS[cat].color, icon:CATS[cat].icon};
   }).filter(c=>c.avg>0).sort((a,b)=>b.avg-a.avg);
 
   const bodyDays = days.filter(d=>body[d]);
   const avgEnergy = bodyDays.length ? (bodyDays.reduce((a,d)=>a+(body[d].energy||5),0)/bodyDays.length).toFixed(1) : "—";
-  const avgSleep  = bodyDays.length ? (bodyDays.reduce((a,d)=>a+(body[d].sleep||7),0)/bodyDays.length).toFixed(1) : "—";
+  const avgSleep  = bodyDays.length ? (bodyDays.filter(d=>body[d].sleep).reduce((a,d,_,arr)=>a+body[d].sleep/arr.length,0)).toFixed(1) : "—";
   const workMin   = days.reduce((a,d)=>a+workSess.filter(s=>s.date===d).reduce((x,y)=>x+(y.duration||0),0),0);
   const perfectDays = scores.filter(s=>s.pct>=90).length;
   const best = scores.reduce((b,s)=>s.pct>(b?.pct||0)?s:b,null);
 
-  // Month view for heatmap
   const now = new Date();
   const targetMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
   const y = targetMonth.getFullYear(), m = targetMonth.getMonth();
@@ -827,102 +944,99 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{fontWeight:800,fontSize:22}}>Analytics</div>
+        <div style={{fontWeight:700,fontSize:22,letterSpacing:-0.5}}>Analytics</div>
         <div style={{display:"flex",gap:6}}>
           {[["7d","7j"],["30d","30j"],["90d","90j"]].map(([p,l])=>(
-            <button key={p} onClick={()=>setPeriod(p)} style={{padding:"5px 12px",borderRadius:20,border:"none",background:period===p?C.gold:C.card,color:period===p?"#000":C.text3,fontSize:12,fontWeight:700,cursor:"pointer"}}>{l}</button>
+            <button key={p} onClick={()=>setPeriod(p)} style={{padding:"5px 12px",borderRadius:20,border:"none",background:period===p?C.gold:C.card,color:period===p?"#0a0a0a":C.text3,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:FONT}}>{l}</button>
           ))}
         </div>
       </div>
 
-      {/* Hero score card */}
       <Card glow style={{background:`linear-gradient(135deg, ${C.card}, ${C.card2})`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div>
-            <div style={{fontSize:11,color:C.text3,fontWeight:700,letterSpacing:1,marginBottom:4}}>SCORE MOYEN</div>
-            <div style={{fontSize:54,fontWeight:900,color:avg>=80?C.green:avg>=60?C.gold:C.red,lineHeight:1}}>{avg}%</div>
-            <div style={{fontSize:12,color:diff>=0?C.green:C.red,fontWeight:700,marginTop:6}}>
-              {diff>=0?"▲":"▼"} {Math.abs(diff)}% vs période précédente
+            <div style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.8,marginBottom:4}}>SCORE MOYEN</div>
+            <div style={{fontSize:54,fontWeight:800,color:avg>=80?C.green:avg>=60?C.gold:C.red,lineHeight:1,letterSpacing:-2}}>{avg}%</div>
+            <div style={{fontSize:12,color:diff>=0?C.green:C.red,fontWeight:600,marginTop:6,display:"inline-flex",alignItems:"center",gap:4}}>
+              <Icon name={diff>=0?"trendUp":"trendDown"} size={12}/> {Math.abs(diff)}% vs période précédente
             </div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:22,fontWeight:900,color:C.gold}}>{perfectDays}</div>
-            <div style={{fontSize:10,color:C.text4}}>jours parfaits</div>
-            <div style={{fontSize:22,fontWeight:900,color:C.purple,marginTop:8}}>{best?.pct||0}%</div>
-            <div style={{fontSize:10,color:C.text4}}>meilleur jour</div>
+            <div style={{fontSize:22,fontWeight:800,color:C.gold,letterSpacing:-0.5}}>{perfectDays}</div>
+            <div style={{fontSize:10,color:C.text4,fontWeight:500}}>jours parfaits</div>
+            <div style={{fontSize:22,fontWeight:800,color:C.green,marginTop:8,letterSpacing:-0.5}}>{best?.pct||0}%</div>
+            <div style={{fontSize:10,color:C.text4,fontWeight:500}}>meilleur jour</div>
           </div>
         </div>
         <Sparkline data={scores.map(s=>s.pct)} color={avg>=70?C.green:C.gold} h={60}/>
       </Card>
 
-      {/* Monthly heatmap */}
+      {/* Heatmap */}
       <Card>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:1}}>HEATMAP · <span style={{textTransform:"capitalize",color:C.text2}}>{monthName}</span></div>
+          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,display:"inline-flex",alignItems:"center",gap:6}}>
+            <Icon name="calendar" size={12}/> HEATMAP · <span style={{textTransform:"capitalize",color:C.text2,fontWeight:700}}>{monthName}</span>
+          </div>
           <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>setMonthOffset(o=>o-1)} style={{...navArrow,width:28,height:28,fontSize:16}}>‹</button>
-            <button onClick={()=>setMonthOffset(0)} disabled={monthOffset===0} style={{...navArrow,width:"auto",height:28,padding:"0 10px",fontSize:11,fontWeight:700,opacity:monthOffset===0?0.4:1}}>Actuel</button>
-            <button onClick={()=>setMonthOffset(o=>Math.min(0,o+1))} disabled={monthOffset>=0} style={{...navArrow,width:28,height:28,fontSize:16,opacity:monthOffset>=0?0.4:1}}>›</button>
+            <button onClick={()=>setMonthOffset(o=>o-1)} style={{...navArrow,width:28,height:28}}><Icon name="chevL" size={14}/></button>
+            <button onClick={()=>setMonthOffset(0)} disabled={monthOffset===0} style={{...navArrow,width:"auto",height:28,padding:"0 10px",fontSize:11,fontWeight:600,opacity:monthOffset===0?0.4:1}}>Actuel</button>
+            <button onClick={()=>setMonthOffset(o=>Math.min(0,o+1))} disabled={monthOffset>=0} style={{...navArrow,width:28,height:28,opacity:monthOffset>=0?0.4:1}}><Icon name="chevR" size={14}/></button>
           </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)",gap:4,marginBottom:8}}>
-          {DAY_NAMES.map((d,i)=><div key={i} style={{fontSize:9,color:C.text4,textAlign:"center",fontWeight:700,padding:"3px 0"}}>{d}</div>)}
+          {DAY_NAMES.map((d,i)=><div key={i} style={{fontSize:9,color:C.text4,textAlign:"center",fontWeight:600,padding:"3px 0"}}>{d}</div>)}
           {Array.from({length:firstDow}).map((_,i)=><div key={"e"+i}/>)}
           {monthDays.map(dk=>{
             const s = score(dk);
             const today = dk === todayStr();
             const future = dk > todayStr();
-            const bg = future ? C.bg2
-              : s.pct === 0 ? C.border
-              : s.pct < 40 ? "#78350f"
-              : s.pct < 70 ? "#92400e"
-              : s.pct < 90 ? C.goldD
-              : C.gold;
+            const hasData = (completions[dk] && Object.values(completions[dk]).some(v=>v)) || body[dk];
+            const bg = future ? C.bg2 : heatColor(s.pct, hasData);
             return (
               <div key={dk} title={`${fmtShort(dk)}: ${future?"—":s.pct+"%"}`} style={{
                 aspectRatio:"1", borderRadius:6, background:bg,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:10,fontWeight:800,
-                color: s.pct>=70?"#000":C.text3,
-                border: today ? `2px solid ${C.green}` : "none",
-                opacity: future?0.3:1
+                fontSize:10,fontWeight:700,
+                color: future ? C.text4 : heatTextColor(s.pct),
+                border: today ? `2px solid ${C.gold}` : "none",
+                opacity: future?0.4:1
               }}>{future?"":(s.pct>0?new Date(dk+"T12:00").getDate():"")}</div>
             );
           })}
         </div>
-        <div style={{display:"flex",gap:6,marginTop:12,alignItems:"center",fontSize:10,color:C.text4}}>
-          <span>0</span>
-          {[C.border,"#78350f","#92400e",C.goldD,C.gold].map((c,i)=><div key={i} style={{width:14,height:14,borderRadius:3,background:c}}/>)}
-          <span>100%</span>
+        <div style={{display:"flex",gap:6,marginTop:14,alignItems:"center",fontSize:10,color:C.text4,flexWrap:"wrap"}}>
+          <span style={{fontWeight:600}}>Faible</span>
+          {[0, 25, 45, 65, 80, 95].map(v => <div key={v} style={{width:14,height:14,borderRadius:3,background:heatColor(v, v>0)}}/>)}
+          <span style={{fontWeight:600}}>Élevé</span>
           <div style={{flex:1}}/>
-          <div style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,border:`2px solid ${C.green}`}}/> Aujourd'hui</div>
+          <div style={{display:"inline-flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,border:`2px solid ${C.gold}`}}/> Aujourd'hui</div>
         </div>
       </Card>
 
-      {/* KPI grid */}
+      {/* KPI */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))",gap:8}}>
         {[
-          {l:"Focus travail",v:fmtMin(workMin)||"0m",c:C.blue},
-          {l:"Énergie moy.",v:`${avgEnergy}/10`,c:C.gold},
-          {l:"Sommeil moy.",v:`${avgSleep}h`,c:C.purple},
-          {l:"Jours ≥90%",v:perfectDays,c:C.green},
+          {l:"Focus",v:fmtMin(workMin)||"0m",c:C.gold,icon:"clock"},
+          {l:"Énergie",v:`${avgEnergy}/10`,c:C.gold,icon:"activity"},
+          {l:"Sommeil",v:`${avgSleep}h`,c:C.green,icon:"moon"},
+          {l:"Jours ≥90%",v:perfectDays,c:C.green,icon:"target"},
         ].map(m=>(
           <Card key={m.l} style={{padding:14,textAlign:"center"}}>
-            <div style={{fontSize:22,fontWeight:900,color:m.c}}>{m.v}</div>
-            <div style={{fontSize:10,fontWeight:700,color:C.text4,marginTop:2}}>{m.l}</div>
+            <Icon name={m.icon} size={14} color={m.c} style={{marginBottom:6}}/>
+            <div style={{fontSize:22,fontWeight:800,color:m.c,letterSpacing:-0.5}}>{m.v}</div>
+            <div style={{fontSize:10,fontWeight:600,color:C.text4,marginTop:2}}>{m.l}</div>
           </Card>
         ))}
       </div>
 
-      {/* By category */}
       {catAvg.length > 0 && (
         <Card>
-          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:1,marginBottom:12}}>PAR CATÉGORIE (30j glissants)</div>
+          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:12}}>PAR CATÉGORIE · 30J GLISSANTS</div>
           {catAvg.map(c=>(
             <div key={c.cat} style={{marginBottom:12}}>
-              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5}}>
-                <span>{c.emoji} {c.cat}</span>
-                <span style={{fontWeight:800,color:c.color}}>{c.avg}%</span>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5,alignItems:"center"}}>
+                <span style={{display:"inline-flex",alignItems:"center",gap:8,fontWeight:500}}><Icon name={c.icon} size={13} color={c.color}/>{c.cat}</span>
+                <span style={{fontWeight:700,color:c.color,letterSpacing:-0.2}}>{c.avg}%</span>
               </div>
               <PBar value={c.avg} color={c.color} h={6}/>
             </div>
@@ -930,45 +1044,47 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
         </Card>
       )}
 
-      {/* Habit detail with fixed scoring */}
       <Card>
-        <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:1,marginBottom:10}}>HABITUDES · 30 JOURS GLISSANTS</div>
-        <div style={{fontSize:11,color:C.text4,marginBottom:10,lineHeight:1.5}}>
-          📈 Calcul: depuis la <b>première complétion</b> de l'habitude, sur les 30 derniers jours applicables.
+        <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:8}}>HABITUDES · 30 JOURS GLISSANTS</div>
+        <div style={{fontSize:11,color:C.text4,marginBottom:12,lineHeight:1.5}}>
+          Calcul depuis la première complétion, sur les 30 derniers jours applicables.
         </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
           <FilterChip active={filter==="all"} onClick={()=>setFilter("all")}>Toutes</FilterChip>
           {Object.keys(CATS).map(cat=>(
-            <FilterChip key={cat} active={filter===cat} onClick={()=>setFilter(cat)} color={CATS[cat].color}>{CATS[cat].emoji} {cat}</FilterChip>
+            <FilterChip key={cat} active={filter===cat} onClick={()=>setFilter(cat)} color={CATS[cat].color}>
+              <Icon name={CATS[cat].icon} size={11} color={filter===cat?CATS[cat].color:C.text3}/> {cat}
+            </FilterChip>
           ))}
         </div>
         {filtered.map((h,i)=>(
           <div key={h.id} style={{marginBottom:12,opacity:h.firstSeen?1:0.45}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}>
-              <div style={{display:"flex",gap:6,alignItems:"center",flex:1,minWidth:0}}>
-                <span style={{color:C.text4,fontSize:11,width:18,flexShrink:0}}>{i+1}</span>
-                <span style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.label}</span>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+              <div style={{display:"flex",gap:8,alignItems:"center",flex:1,minWidth:0}}>
+                <span style={{color:C.text4,fontSize:11,width:18,flexShrink:0,fontWeight:500}}>{i+1}</span>
+                <span style={{fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.label}</span>
                 {h.nn&&<Badge color={C.red}>NN</Badge>}
               </div>
-              <span style={{fontWeight:800,color:!h.firstSeen?C.text4:h.rate>=80?C.green:h.rate>=50?C.gold:C.red,marginLeft:8}}>
+              <span style={{fontWeight:700,color:!h.firstSeen?C.text4:h.rate>=80?C.green:h.rate>=50?C.gold:C.red,marginLeft:8,letterSpacing:-0.2}}>
                 {h.firstSeen ? `${h.rate}%` : "—"}
               </span>
             </div>
             <PBar value={h.firstSeen?h.rate:0} color={h.rate>=80?C.green:h.rate>=50?C.gold:C.red} h={4}/>
             {h.firstSeen && (
-              <div style={{fontSize:10,color:C.text4,marginTop:3}}>{h.done}/{h.total} depuis {fmtShort(h.firstSeen)}</div>
+              <div style={{fontSize:10,color:C.text4,marginTop:3,fontWeight:500}}>{h.done}/{h.total} depuis {fmtShort(h.firstSeen)}</div>
             )}
           </div>
         ))}
       </Card>
 
-      {/* To improve */}
       {habitRates.filter(h=>h.firstSeen && h.rate<60).length>0&&(
         <Card style={{border:`1px solid ${C.red}30`}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.red,letterSpacing:1,marginBottom:10}}>⚠ À AMÉLIORER</div>
+          <div style={{fontSize:11,fontWeight:600,color:C.red,letterSpacing:0.6,marginBottom:10,display:"inline-flex",alignItems:"center",gap:6}}>
+            <Icon name="alert" size={12}/> À AMÉLIORER
+          </div>
           {habitRates.filter(h=>h.firstSeen && h.rate<60).slice(0,5).map(h=>(
             <div key={h.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{fontSize:13,fontWeight:600}}>{h.label} <span style={{color:C.text3,fontSize:11}}>· {h.cat}</span></div>
+              <div style={{fontSize:13,fontWeight:500}}>{h.label} <span style={{color:C.text3,fontSize:11}}>· {h.cat}</span></div>
               <Badge color={C.red}>{h.rate}%</Badge>
             </div>
           ))}
@@ -979,29 +1095,69 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// AI AGENT (actionable)
+// AI AGENT (actionable + sport tracking)
 // ═══════════════════════════════════════════════════════════════════════════════
-function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks,projects,setProjects,profile,score,habitRate,activeDayKey,sportLog,setSportLog,goals}) {
+
+// Sport keywords for natural language detection
+const SPORT_KEYWORDS = [
+  {type:"Course",   re:/\b(cours[eu]|run(?:ning|)|jog|footing)\b/i},
+  {type:"Gym",      re:/\b(gym|muscu(?:lation|)|pecs?|chest|dos|back|bras|arms|leg|jambes?|workout|seance)\b/i},
+  {type:"Boxe",     re:/\b(bo?xe?|boxing|sparring|sacs?|sac de frappe|round)/i},
+  {type:"Vélo",     re:/\b(v[eé]lo|bike|cycling|cyclisme)\b/i},
+  {type:"Natation", re:/\b(nat[ae]tion|swim|piscine|nag[eé])/i},
+  {type:"Yoga",     re:/\b(yoga|stretch|[eé]tirement)/i},
+  {type:"Marche",   re:/\b(march[eé]|walk|randonn[eé]e)\b/i},
+];
+
+const detectSport = (msg) => {
+  const hit = SPORT_KEYWORDS.find(s => s.re.test(msg));
+  if (!hit) return null;
+  // distance (km)
+  const distM = msg.match(/(\d+(?:[.,]\d+)?)\s*k(?:m|ilom)/i);
+  // duration (min / h)
+  const durMinM = msg.match(/(\d+)\s*(?:min|minutes?)\b/i);
+  const durHM = msg.match(/(\d+(?:[.,]\d+)?)\s*h(?:eures?|)\b/i);
+  // rounds
+  const roundM = msg.match(/(\d+)\s*(?:rounds?|reprises?)/i);
+  // intensity words
+  let intensity = 3;
+  if (/intense|dur|hard|max|pr|record/i.test(msg)) intensity = 5;
+  else if (/facile|easy|light|chill|recup/i.test(msg)) intensity = 2;
+  else if (/moyen|medium|normal/i.test(msg)) intensity = 3;
+
+  const distance = distM ? parseFloat(distM[1].replace(",",".")) : 0;
+  let duration = 0;
+  if (durMinM) duration = parseInt(durMinM[1],10);
+  else if (durHM) duration = Math.round(parseFloat(durHM[1].replace(",","."))*60);
+
+  return {
+    type: hit.type,
+    distance,
+    duration,
+    intensity,
+    rounds: roundM ? parseInt(roundM[1],10) : 0,
+    notes: msg.length > 120 ? msg.slice(0,120)+"…" : msg,
+  };
+};
+
+function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks,profile,score,habitRate,activeDayKey,sportLog,setSportLog,goals}) {
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sportForm, setSportForm] = useState(false);
-  const [sport, setSport] = useState({type:"Course 🏃",date:activeDayKey,duration:"",distance:"",intensity:3,notes:""});
+  const [sport, setSport] = useState({type:"Course",date:activeDayKey,duration:"",distance:"",intensity:3,notes:""});
   const bottom = useRef(null);
 
   useEffect(()=>bottom.current?.scrollIntoView({behavior:"smooth"}),[msgs]);
 
-  // ──────── LOCAL ACTION PARSER ────────
-  // Parses user messages for direct app actions. Works without API.
   const parseAction = (msg) => {
     const m = msg.toLowerCase().trim();
     // Add task
-    let r = m.match(/^(?:ajoute|crée|create|add)\s+(?:une\s+)?t[âa]che[:\s]+(.+)$/i)
-         || msg.match(/^(?:ajoute|crée|add)\s+t[âa]che[:\s]+(.+)$/i);
+    let r = msg.match(/^(?:ajoute|crée|create|add)\s+(?:une\s+)?t[âa]che\s*[:\-]?\s+(.+)$/i);
     if (r) return {type:"add_task", title: r[1].trim()};
 
     // Add habit
-    r = m.match(/^(?:ajoute|crée|create|add)\s+(?:une\s+)?(?:habitude|routine)[:\s]+(.+)$/i);
+    r = msg.match(/^(?:ajoute|crée|create|add)\s+(?:une\s+)?(?:habitude|routine)\s*[:\-]?\s+(.+)$/i);
     if (r) {
       const rest = r[1].trim();
       let cat = "Discipline";
@@ -1010,25 +1166,33 @@ function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks
     }
 
     // Remove habit
-    r = m.match(/^(?:supprime|enlève|retire|remove|delete)\s+(?:l['’]\s*)?(?:habitude|routine)[:\s]+(.+)$/i);
+    r = msg.match(/^(?:supprime|enlève|retire|remove|delete)\s+(?:l['’]\s*)?(?:habitude|routine)\s*[:\-]?\s+(.+)$/i);
     if (r) return {type:"remove_habit", label: r[1].trim()};
 
-    // Remove habit on specific day pattern "retire gym dimanche"
-    r = m.match(/^(?:retire|enlève|supprime)\s+(.+?)\s+(?:le\s+)?(dimanche|lundi|mardi|mercredi|jeudi|vendredi|samedi)$/i);
+    // Remove habit on day
+    r = msg.match(/^(?:retire|enlève|supprime)\s+(.+?)\s+(?:le\s+)?(dimanche|lundi|mardi|mercredi|jeudi|vendredi|samedi)s?$/i);
     if (r) {
       const day = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"].indexOf(r[2].toLowerCase());
       return {type:"remove_habit_day", label: r[1].trim(), day};
     }
 
     // Toggle NN
-    r = m.match(/^(?:marque|rend[rs]?)\s+(.+?)\s+(?:comme\s+)?non[-\s]?n[ée]go(?:ciable)?$/i);
+    r = msg.match(/^(?:marque|rend[rs]?)\s+(.+?)\s+(?:comme\s+)?non[-\s]?n[ée]go(?:ciable)?$/i);
     if (r) return {type:"toggle_nn", label: r[1].trim()};
 
-    // Complete habit today
-    r = m.match(/^(?:valide|complete|coche|marque)\s+(.+?)(?:\s+(?:aujourd'?hui|today))?$/i);
+    // Complete habit
+    r = msg.match(/^(?:valide|complete|coche|marque)\s+(.+?)(?:\s+(?:aujourd'?hui|today))?$/i);
     if (r && !/^(?:valide|complete|coche|marque)\s*$/i.test(msg)) {
       return {type:"complete_habit", label: r[1].trim()};
     }
+
+    // Sport tracking — natural language (rename detected sport.type → sportType to avoid collision)
+    const sport = detectSport(msg);
+    if (sport) {
+      const {type:sportType, ...rest} = sport;
+      return {type:"log_sport", sportType, ...rest};
+    }
+
     return null;
   };
 
@@ -1036,43 +1200,75 @@ function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks
     if (!action) return null;
     try {
       if (action.type === "add_task") {
-        const id = Date.now().toString();
-        setTasks(p => [...(p||[]), {id, title:action.title, priority:"medium", project:"", done:false, createdAt:todayStr()}]);
-        return `✓ Tâche ajoutée: **${action.title}**`;
+        setTasks(p => [...(p||[]), {id:Date.now().toString(), title:action.title, priority:"medium", project:"", done:false, createdAt:todayStr()}]);
+        return `✓ Tâche ajoutée : **${action.title}**`;
       }
       if (action.type === "add_habit") {
-        const id = "h"+Date.now();
-        setHabits(p => [...(p||[]), {id, label:action.label, cat:normCat(action.cat), freq:action.freq||"daily", nn:!!action.nn}]);
-        return `✓ Habitude créée: **${action.label}** (${action.cat})${action.nn?" · non-négociable":""}`;
+        setHabits(p => [...(p||[]), {id:"h"+Date.now(), label:action.label, cat:normCat(action.cat), freq:action.freq||"daily", nn:!!action.nn}]);
+        return `✓ Habitude créée : **${action.label}** (${action.cat})${action.nn?" · non-négociable":""}`;
       }
       if (action.type === "remove_habit") {
         const target = habits.find(h => h.label.toLowerCase().includes(action.label.toLowerCase()));
-        if (!target) return `❌ Habitude "${action.label}" non trouvée.`;
+        if (!target) return `Habitude "${action.label}" non trouvée.`;
         setHabits(p => (p||[]).filter(h => h.id !== target.id));
-        return `✓ Habitude supprimée: **${target.label}**`;
+        return `✓ Habitude supprimée : **${target.label}**`;
       }
       if (action.type === "remove_habit_day") {
         const target = habits.find(h => h.label.toLowerCase().includes(action.label.toLowerCase()));
-        if (!target) return `❌ Habitude "${action.label}" non trouvée.`;
+        if (!target) return `Habitude "${action.label}" non trouvée.`;
         const days = (target.days || []).filter(d => d !== action.day);
         setHabits(p => (p||[]).map(h => h.id===target.id ? {...h, freq:"specific", days} : h));
         return `✓ **${target.label}** retiré des ${DAY_FULL[action.day].toLowerCase()}s`;
       }
       if (action.type === "toggle_nn") {
         const target = habits.find(h => h.label.toLowerCase().includes(action.label.toLowerCase()));
-        if (!target) return `❌ Habitude "${action.label}" non trouvée.`;
+        if (!target) return `Habitude "${action.label}" non trouvée.`;
         setHabits(p => (p||[]).map(h => h.id===target.id ? {...h, nn:!h.nn} : h));
         return `✓ **${target.label}** ${target.nn?"n'est plus":"est maintenant"} non-négociable`;
       }
       if (action.type === "complete_habit") {
         const target = habits.find(h => h.label.toLowerCase().includes(action.label.toLowerCase()));
-        if (!target) return `❌ Habitude "${action.label}" non trouvée.`;
-        if (completions[activeDayKey]?.[target.id]) return `ℹ **${target.label}** est déjà validée aujourd'hui`;
+        if (!target) return `Habitude "${action.label}" non trouvée.`;
+        if (completions[activeDayKey]?.[target.id]) return `**${target.label}** est déjà validée aujourd'hui`;
         toggle(target.id, activeDayKey);
         return `✓ **${target.label}** validée aujourd'hui`;
       }
+      if (action.type === "log_sport") {
+        const entry = {
+          id:Date.now().toString(),
+          type:action.sportType || "Autre",
+          date:activeDayKey,
+          distance:action.distance||0,
+          duration:action.duration||0,
+          intensity:action.intensity||3,
+          rounds:action.rounds||0,
+          notes:action.notes||"",
+        };
+        setSportLog(p => [entry, ...(p||[])]);
+        // Compute suggestion from history
+        const hist = (sportLog||[]).filter(s => s.type === entry.type);
+        const total = hist.length;
+        const lastSame = hist[0];
+        let detail = [];
+        if (entry.distance) detail.push(`${entry.distance}km`);
+        if (entry.duration) detail.push(`${entry.duration}min`);
+        if (entry.rounds) detail.push(`${entry.rounds} rounds`);
+        const detailStr = detail.length ? " · "+detail.join(" · ") : "";
+        let suggestion = "";
+        if (total > 0 && lastSame) {
+          const days = diffDays(lastSame.date, activeDayKey);
+          suggestion = `\n\n${total+1}ème séance de ${entry.type.toLowerCase()} · dernière il y a ${days}j`;
+          if (entry.distance && lastSame.distance) {
+            const d = entry.distance - lastSame.distance;
+            suggestion += d>0?` · progression +${d.toFixed(1)}km`:d<0?` · ${d.toFixed(1)}km vs dernière`:"";
+          }
+        } else {
+          suggestion = `\n\nPremière séance de ${entry.type.toLowerCase()} enregistrée.`;
+        }
+        return `✓ Séance loggée : **${entry.type}**${detailStr} · intensité ${entry.intensity}/5${suggestion}`;
+      }
     } catch (e) {
-      return `❌ Erreur: ${e.message}`;
+      return `Erreur: ${e.message}`;
     }
     return null;
   };
@@ -1081,14 +1277,14 @@ function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks
     const sc = score(activeDayKey);
     const bodyT = body[activeDayKey]||{};
     const urgTasks = tasks.filter(t=>!t.done && normPrio(t.priority||t.urgency)==="high");
-    const recentSport = (sportLog||[]).slice(-5).map(s=>`${s.type} ${s.date}${s.distance?` ${s.distance}km`:""}${s.duration?` ${s.duration}min`:""}`).join(" | ");
+    const recentSport = (sportLog||[]).slice(0,5).map(s=>`${s.type} ${s.date}${s.distance?` ${s.distance}km`:""}${s.duration?` ${s.duration}min`:""}${s.rounds?` ${s.rounds}rounds`:""}`).join(" | ");
     const habitList = habits.map(h=>`${h.label} (${h.cat}${h.nn?", NN":""})`).join(", ");
     return `Tu es Growth Agent — assistant de performance. Parle français, direct et actionnable.
 
-CONTEXTE DU ${activeDayKey}:
-- Score: ${sc.pct}% (${sc.done}/${sc.total}) | Non-négo: ${sc.nnDone}/${sc.nnTotal} ${!sc.nnOk?"⚠ BRISÉ":"✅"}
-- Énergie: ${bodyT.energy??"?"}/10 | Sommeil: ${bodyT.sleep??"?"}h
-- Profil: ${profile.age||"?"} ans, ${profile.weight||"?"}kg | Objectif: ${profile.goal||"Non défini"}
+CONTEXTE ${activeDayKey}:
+- Score: ${sc.pct}% (${sc.done}/${sc.total}) | Non-négo: ${sc.nnDone}/${sc.nnTotal} ${!sc.nnOk?"[broken]":"OK"}
+- Sommeil: ${bodyT.sleep??"?"}h (couché ${bodyT.bedTime??"?"}, levé ${bodyT.wakeTime??"?"})
+- Profil: ${profile.age||"?"}a ${profile.weight||"?"}kg | Objectif: ${profile.goal||"—"}
 
 HABITUDES: ${habitList}
 SCORES 7J: ${lastN(7).map(d=>`${d.slice(5)}:${score(d).pct}%`).join(" ")}
@@ -1096,12 +1292,9 @@ TÂCHES URGENTES: ${urgTasks.map(t=>t.title).join(", ")||"Aucune"}
 SPORT RÉCENT: ${recentSport||"Aucune"}
 OBJECTIFS 2026: ${(goals||[]).map(g=>`[${g.level}] ${g.title}`).join(" | ")||"Aucun"}
 
-L'utilisateur peut te demander d'exécuter des actions directement dans l'app:
-- "ajoute une tâche: X"
-- "crée une habitude: X"
-- "supprime l'habitude X"
-- "marque X comme non-négociable"
-- "valide X aujourd'hui"
+L'utilisateur peut te demander d'exécuter des actions ou tracker son sport:
+- "ajoute une tâche: X" / "crée une habitude: X" / "supprime l'habitude X"
+- "j'ai couru 5km" / "séance boxe 6 rounds" / "gym chest 1h" → loggé auto
 
 Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
   },[score,activeDayKey,body,tasks,sportLog,profile,habits,goals]);
@@ -1113,7 +1306,7 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
     setMsgs(prev => [...prev, userMsg]);
     if (!overrideInput) setInput("");
 
-    // Try local action parsing first — works offline
+    // Try local action parsing first
     const action = parseAction(msg);
     if (action) {
       const result = executeAction(action);
@@ -1135,7 +1328,7 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
       const reply = data.content?.find(c=>c.type==="text")?.text || data.error?.message || "Erreur API.";
       setMsgs(prev=>[...prev,{role:"assistant",content:reply}]);
     } catch {
-      setMsgs(prev=>[...prev,{role:"assistant",content:"Connexion impossible. Les actions directes ('ajoute une tâche: ...', 'supprime l'habitude X'...) fonctionnent toujours sans réseau."}]);
+      setMsgs(prev=>[...prev,{role:"assistant",content:"Connexion impossible. Les actions directes et le tracking sport fonctionnent sans réseau."}]);
     }
     setLoading(false);
   };
@@ -1144,46 +1337,53 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
     const entry = {...sport, id:Date.now().toString(), distance:parseFloat(sport.distance)||0, duration:parseFloat(sport.duration)||0};
     setSportLog(prev => [entry, ...(prev||[])]);
     setSportForm(false);
-    setSport({type:"Course 🏃",date:activeDayKey,duration:"",distance:"",intensity:3,notes:""});
-    const m = `Séance enregistrée: ${entry.type} le ${entry.date}${entry.distance?` - ${entry.distance}km`:""}${entry.duration?` - ${entry.duration}min`:""}, intensité ${entry.intensity}/5. Analyse brève ?`;
+    setSport({type:"Course",date:activeDayKey,duration:"",distance:"",intensity:3,notes:""});
+    const m = `Séance enregistrée: ${entry.type}${entry.distance?` ${entry.distance}km`:""}${entry.duration?` ${entry.duration}min`:""}, intensité ${entry.intensity}/5. Analyse brève ?`;
     setTimeout(()=>send(m), 200);
   };
 
   const QUICK = [
     "Analyse mes 7 derniers jours",
     "Mes priorités urgentes aujourd'hui",
-    "Comment optimiser mon énergie ?",
-    "ajoute une tâche: appeler fournisseur",
-    "crée une habitude: boire 3L d'eau",
+    "j'ai couru 5km ce matin",
+    "ajoute une tâche : appeler fournisseur",
+    "crée une habitude : boire 3L d'eau",
   ];
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 180px)",animation:"fadeIn .3s"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div>
-          <div style={{fontWeight:800,fontSize:22,lineHeight:1}}>Growth Agent ✨</div>
-          <div style={{fontSize:11,color:C.text3,marginTop:3}}>Actions directes · conseils data-driven</div>
+          <div style={{fontWeight:700,fontSize:22,lineHeight:1,letterSpacing:-0.5,display:"inline-flex",alignItems:"center",gap:8}}>
+            <Icon name="sparkles" size={20} color={C.gold}/> Growth Agent
+          </div>
+          <div style={{fontSize:11,color:C.text3,marginTop:4}}>Actions directes · sport tracking · conseils data-driven</div>
         </div>
-        <Btn onClick={()=>setSportForm(true)} variant="green" style={{padding:"7px 12px",fontSize:12}}>+ Séance 🏃</Btn>
+        <Btn onClick={()=>setSportForm(true)} variant="green" style={{padding:"7px 12px",fontSize:12}}>
+          <Icon name="plus" size={13}/> Séance
+        </Btn>
       </div>
 
       <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,paddingBottom:8}}>
         {msgs.length===0 && (
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <Card style={{padding:16,background:`linear-gradient(135deg, ${C.gold}10, transparent)`}}>
+            <Card style={{padding:16,background:`linear-gradient(135deg, ${C.gold}0a, transparent)`}}>
               <div style={{fontSize:13,color:C.text2,lineHeight:1.6}}>
-                <div style={{fontWeight:700,color:C.gold,marginBottom:6}}>✨ Je peux agir sur ton app</div>
-                <div style={{fontSize:12}}>Écris des commandes directes comme:</div>
-                <ul style={{margin:"6px 0 0 0",paddingLeft:18,fontSize:12,color:C.text3}}>
-                  <li><code style={codeS}>ajoute une tâche: appeler fournisseur</code></li>
-                  <li><code style={codeS}>crée une habitude: 5 minutes méditation</code></li>
+                <div style={{fontWeight:700,color:C.gold,marginBottom:6,display:"inline-flex",alignItems:"center",gap:6}}>
+                  <Icon name="sparkles" size={14}/> Je peux agir sur ton app
+                </div>
+                <div style={{fontSize:12}}>Écris des commandes directes comme :</div>
+                <ul style={{margin:"6px 0 0",paddingLeft:18,fontSize:12,color:C.text3,lineHeight:1.8}}>
+                  <li><code style={codeS}>ajoute une tâche : appeler fournisseur</code></li>
+                  <li><code style={codeS}>crée une habitude : méditer 5min</code></li>
                   <li><code style={codeS}>supprime l'habitude boxe</code></li>
-                  <li><code style={codeS}>valide hydratation 2L</code></li>
+                  <li><code style={codeS}>j'ai couru 5km ce matin</code></li>
+                  <li><code style={codeS}>séance boxe 6 rounds intense</code></li>
                 </ul>
               </div>
             </Card>
             {QUICK.map(q=>(
-              <button key={q} onClick={()=>send(q)} style={{textAlign:"left",padding:"11px 14px",borderRadius:11,background:C.card,border:`1px solid ${C.border}`,color:C.text2,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>{q}</button>
+              <button key={q} onClick={()=>send(q)} style={{textAlign:"left",padding:"11px 14px",borderRadius:11,background:C.card,border:`1px solid ${C.border}`,color:C.text2,fontSize:13,cursor:"pointer",fontFamily:FONT}}>{q}</button>
             ))}
           </div>
         )}
@@ -1192,14 +1392,14 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
             <div style={{
               maxWidth:"88%",padding:"12px 16px",
               borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",
-              background: m.role==="user" ? C.gold : m.action ? C.green+"15" : C.card,
-              color: m.role==="user" ? "#000" : C.text,
-              border: m.role==="assistant" ? `1px solid ${m.action?C.green+"40":C.border}` : "none",
-              fontSize:14,lineHeight:1.6,whiteSpace:"pre-wrap"
+              background: m.role==="user" ? C.gold : m.action ? C.green+"14" : C.card,
+              color: m.role==="user" ? "#0a0a0a" : C.text,
+              border: m.role==="assistant" ? `1px solid ${m.action?C.green+"30":C.border}` : "none",
+              fontSize:14,lineHeight:1.6,whiteSpace:"pre-wrap",fontFamily:FONT
             }}>
               {m.content.split(/(\*\*[^*]+\*\*)/g).map((part,i)=>
                 part.startsWith("**")
-                  ? <b key={i} style={{color:m.role==="user"?"#000":C.gold}}>{part.slice(2,-2)}</b>
+                  ? <b key={i} style={{color:m.role==="user"?"#0a0a0a":m.action?C.green:C.gold,fontWeight:700}}>{part.slice(2,-2)}</b>
                   : <span key={i}>{part}</span>
               )}
             </div>
@@ -1216,30 +1416,32 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
       </div>
 
       <div style={{display:"flex",gap:8,paddingTop:10,borderTop:`1px solid ${C.border}`,background:C.bg}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Message ou commande..." style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,color:C.text,padding:"11px 14px",fontSize:14,outline:"none",fontFamily:"inherit"}}/>
-        <Btn onClick={()=>send()} disabled={loading} style={{padding:"11px 16px",fontSize:16}}>↑</Btn>
+        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Message ou commande…" style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,color:C.text,padding:"11px 14px",fontSize:14,outline:"none",fontFamily:FONT}}/>
+        <Btn onClick={()=>send()} disabled={loading} style={{padding:"11px 14px"}}><Icon name="arrowUp" size={16}/></Btn>
       </div>
 
       {sportForm && (
-        <Modal title="Log séance sport 🏃" onClose={()=>setSportForm(false)}>
+        <Modal title="Nouvelle séance sport" onClose={()=>setSportForm(false)}>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <FSelect label="Type" value={sport.type} onChange={e=>setSport(p=>({...p,type:e.target.value}))} options={SPORT_TYPES}/>
+            <FSelect label="TYPE" value={sport.type} onChange={e=>setSport(p=>({...p,type:e.target.value}))} options={SPORT_TYPES}/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <FInput label="Date" value={sport.date} onChange={e=>setSport(p=>({...p,date:e.target.value}))} type="date"/>
-              <FInput label="Durée (min)" value={sport.duration} onChange={e=>setSport(p=>({...p,duration:e.target.value}))} type="number" placeholder="60"/>
+              <FInput label="DATE" value={sport.date} onChange={e=>setSport(p=>({...p,date:e.target.value}))} type="date"/>
+              <FInput label="DURÉE (MIN)" value={sport.duration} onChange={e=>setSport(p=>({...p,duration:e.target.value}))} type="number" placeholder="60"/>
             </div>
-            {sport.type.includes("Course") && <FInput label="Distance (km)" value={sport.distance} onChange={e=>setSport(p=>({...p,distance:e.target.value}))} type="number" placeholder="10.5"/>}
+            {sport.type === "Course" && <FInput label="DISTANCE (KM)" value={sport.distance} onChange={e=>setSport(p=>({...p,distance:e.target.value}))} type="number" placeholder="10.5"/>}
             <div>
-              <div style={{fontSize:11,color:C.text3,fontWeight:700,marginBottom:8}}>INTENSITÉ {sport.intensity}/5</div>
+              <div style={{fontSize:11,color:C.text3,fontWeight:600,marginBottom:8,letterSpacing:0.4}}>INTENSITÉ · {sport.intensity}/5</div>
               <div style={{display:"flex",gap:7}}>
                 {[1,2,3,4,5].map(i=>{
-                  const c=[C.green,"#86efac",C.gold,"#f97316",C.red][i-1];
-                  return <button key={i} onClick={()=>setSport(p=>({...p,intensity:i}))} style={{flex:1,padding:"10px 0",borderRadius:9,border:`2px solid ${sport.intensity>=i?c:C.border2}`,background:sport.intensity>=i?c+"25":"transparent",color:sport.intensity>=i?c:C.text4,fontSize:14,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>{i}</button>;
+                  const c=[C.green,"#6be8b3",C.gold,"#e88556",C.red][i-1];
+                  return <button key={i} onClick={()=>setSport(p=>({...p,intensity:i}))} style={{flex:1,padding:"10px 0",borderRadius:9,border:`2px solid ${sport.intensity>=i?c:C.border2}`,background:sport.intensity>=i?c+"18":"transparent",color:sport.intensity>=i?c:C.text4,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:FONT}}>{i}</button>;
                 })}
               </div>
             </div>
-            <FText label="NOTES" value={sport.notes} onChange={e=>setSport(p=>({...p,notes:e.target.value}))} placeholder="Comment tu t'es senti..."/>
-            <Btn onClick={saveSport} variant="green" style={{width:"100%",padding:"13px",fontSize:15}}>Enregistrer & analyser ✓</Btn>
+            <FText label="NOTES" value={sport.notes} onChange={e=>setSport(p=>({...p,notes:e.target.value}))} placeholder="Comment tu t'es senti…"/>
+            <Btn onClick={saveSport} variant="green" style={{width:"100%",padding:"13px",fontSize:14}}>
+              <Icon name="check" size={15}/> Enregistrer & analyser
+            </Btn>
           </div>
         </Modal>
       )}
@@ -1247,14 +1449,13 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
   );
 }
 
-const codeS = {background:C.bg2,padding:"2px 6px",borderRadius:4,fontSize:11,color:C.gold,fontFamily:"'SF Mono',Consolas,monospace"};
+const codeS = {background:C.bg2,padding:"2px 6px",borderRadius:4,fontSize:11,color:C.gold,fontFamily:"'SF Mono', Consolas, monospace"};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ME (HUB)
 // ═══════════════════════════════════════════════════════════════════════════════
 function MeTab(props) {
   const [section, setSection] = useState("hub");
-
   if (section === "hub") return <MeHub setSection={setSection} {...props}/>;
   if (section === "routines") return <RoutineSection back={()=>setSection("hub")} {...props}/>;
   if (section === "focus") return <FocusSection back={()=>setSection("hub")} {...props}/>;
@@ -1263,31 +1464,29 @@ function MeTab(props) {
   return null;
 }
 
-function MeHub({setSection, habits, tasks, goals, profile, workSess}) {
+function MeHub({setSection, habits, goals, profile, workSess}) {
   const focusMin = workSess.filter(s=>s.date===todayStr()).reduce((a,b)=>a+(b.duration||0),0);
   const cards = [
-    {id:"routines", icon:"🔁", title:"Routines",   sub:`${habits.length} habitudes · ${habits.filter(h=>h.nn).length} NN`, color:C.green},
-    {id:"focus",    icon:"⏱", title:"Focus",      sub:`${fmtMin(focusMin)||"0m"} aujourd'hui`, color:C.blue},
-    {id:"profile",  icon:"👤", title:"Profil",     sub:profile.age?`${profile.age} ans · ${profile.weight||"?"}kg`:"À compléter", color:C.purple},
-    {id:"goals",    icon:"🎯", title:"Objectifs 2026", sub:`${goals.length} objectif${goals.length>1?"s":""} définis`, color:C.gold},
+    {id:"routines", icon:"rotate",    title:"Routines",  sub:`${habits.length} habitudes · ${habits.filter(h=>h.nn).length} NN`, color:C.green},
+    {id:"focus",    icon:"clock",     title:"Focus",     sub:`${fmtMin(focusMin)||"0m"} aujourd'hui`, color:C.gold},
+    {id:"profile",  icon:"user",      title:"Profil",    sub:profile.age?`${profile.age} ans · ${profile.weight||"?"}kg`:"À compléter", color:C.text2},
+    {id:"goals",    icon:"target",    title:"Objectifs 2026", sub:`${goals.length} objectif${goals.length>1?"s":""} définis`, color:C.gold},
   ];
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
       <div>
-        <div style={{fontWeight:800,fontSize:22,lineHeight:1}}>Moi</div>
-        <div style={{fontSize:12,color:C.text3,marginTop:3}}>Configure tes routines, objectifs et profil</div>
+        <div style={{fontWeight:700,fontSize:22,lineHeight:1,letterSpacing:-0.5}}>Moi</div>
+        <div style={{fontSize:12,color:C.text3,marginTop:4}}>Configure tes routines, objectifs et profil</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",gap:10}}>
         {cards.map(c=>(
           <button key={c.id} onClick={()=>setSection(c.id)} style={{
             background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:18,cursor:"pointer",
-            textAlign:"left",fontFamily:"inherit",color:C.text,
-            transition:"all .15s",
-            boxShadow:`0 0 0 1px ${c.color}10`
-          }} onMouseEnter={e=>e.currentTarget.style.borderColor=c.color+"60"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
-            <div style={{fontSize:28,marginBottom:10}}>{c.icon}</div>
-            <div style={{fontSize:16,fontWeight:800,color:c.color,marginBottom:2}}>{c.title}</div>
-            <div style={{fontSize:12,color:C.text3}}>{c.sub}</div>
+            textAlign:"left",fontFamily:FONT,color:C.text,transition:"all .15s",
+          }} onMouseEnter={e=>e.currentTarget.style.borderColor=c.color+"50"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+            <div style={{marginBottom:12}}><Icon name={c.icon} size={22} color={c.color}/></div>
+            <div style={{fontSize:15,fontWeight:700,color:c.color,marginBottom:3,letterSpacing:-0.3}}>{c.title}</div>
+            <div style={{fontSize:12,color:C.text3,fontWeight:500}}>{c.sub}</div>
           </button>
         ))}
       </div>
@@ -1297,12 +1496,11 @@ function MeHub({setSection, habits, tasks, goals, profile, workSess}) {
 
 const BackBtn = ({back,title}) => (
   <div style={{display:"flex",alignItems:"center",gap:12}}>
-    <button onClick={back} style={{...navArrow,width:34,height:34,fontSize:18}}>‹</button>
-    <div style={{fontWeight:800,fontSize:22}}>{title}</div>
+    <button onClick={back} style={{...navArrow,width:34,height:34}}><Icon name="chevL" size={18}/></button>
+    <div style={{fontWeight:700,fontSize:22,letterSpacing:-0.5}}>{title}</div>
   </div>
 );
 
-// ── Routines
 function RoutineSection({back, habits, setHabits}) {
   const [form, setForm] = useState(null);
   const empty = {label:"",cat:"Discipline",freq:"daily",days:[],nn:false};
@@ -1323,30 +1521,30 @@ function RoutineSection({back, habits, setHabits}) {
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
         <BackBtn back={back} title="Routines"/>
-        <Btn onClick={()=>{setD(empty);setForm("new");}}>+ Ajouter</Btn>
+        <Btn onClick={()=>{setD(empty);setForm("new");}}><Icon name="plus" size={14}/> Ajouter</Btn>
       </div>
 
       {Object.entries(grouped).map(([cat,hs])=>{
-        const c = CATS[cat]||{color:C.text3,emoji:"•"};
+        const c = CATS[cat]||{color:C.text3,icon:"check"};
         return (
           <Card key={cat}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-              <span style={{fontSize:15}}>{c.emoji}</span>
-              <span style={{fontSize:12,fontWeight:700,color:c.color,letterSpacing:0.8}}>{cat.toUpperCase()}</span>
-              <span style={{fontSize:11,color:C.text4,marginLeft:"auto"}}>{hs.length}</span>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+              <Icon name={c.icon} size={15} color={c.color}/>
+              <span style={{fontSize:12,fontWeight:700,color:c.color,letterSpacing:0.6}}>{cat.toUpperCase()}</span>
+              <span style={{fontSize:11,color:C.text4,marginLeft:"auto",fontWeight:500}}>{hs.length}</span>
             </div>
             {hs.map(h=>(
               <div key={h.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderTop:`1px solid ${C.border}`}}>
                 <div style={{width:3,height:30,background:c.color,borderRadius:99,flexShrink:0}}/>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:600,fontSize:14}}>{h.label}</div>
+                  <div style={{fontWeight:500,fontSize:14}}>{h.label}</div>
                   <div style={{fontSize:11,color:C.text3,marginTop:2}}>
                     {h.freq==="daily" ? "Quotidien" : (h.days||[]).map(i=>DAY_NAMES[i]).join(" · ")||"—"}
                     {h.nn && " · Non-négociable"}
                   </div>
                 </div>
-                <button onClick={()=>{setD({...h,days:h.days||[]});setForm("edit");}} style={iconBtn}>✏</button>
-                <button onClick={()=>setHabits(p=>p.filter(x=>x.id!==h.id))} style={iconBtn}>🗑</button>
+                <IconBtn name="edit" onClick={()=>{setD({...h,days:h.days||[]});setForm("edit");}} title="Modifier"/>
+                <IconBtn name="trash" onClick={()=>setHabits(p=>p.filter(x=>x.id!==h.id))} title="Supprimer"/>
               </div>
             ))}
           </Card>
@@ -1356,22 +1554,24 @@ function RoutineSection({back, habits, setHabits}) {
       {form && (
         <Modal title={d.id?"Modifier la routine":"Nouvelle routine"} onClose={()=>setForm(null)}>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <FInput label="Nom *" value={d.label} onChange={e=>setD(p=>({...p,label:e.target.value}))} placeholder="Ex: Méditation 10min"/>
-            <FSelect label="Catégorie" value={d.cat} onChange={e=>setD(p=>({...p,cat:e.target.value}))} options={Object.entries(CATS).map(([k,v])=>({value:k,label:`${v.emoji} ${k}`}))}/>
-            <FSelect label="Fréquence" value={d.freq} onChange={e=>setD(p=>({...p,freq:e.target.value}))} options={[{value:"daily",label:"Quotidien"},{value:"specific",label:"Jours spécifiques"}]}/>
+            <FInput label="NOM *" value={d.label} onChange={e=>setD(p=>({...p,label:e.target.value}))} placeholder="Ex: Méditation 10min"/>
+            <FSelect label="CATÉGORIE" value={d.cat} onChange={e=>setD(p=>({...p,cat:e.target.value}))} options={Object.keys(CATS).map(k=>({value:k,label:k}))}/>
+            <FSelect label="FRÉQUENCE" value={d.freq} onChange={e=>setD(p=>({...p,freq:e.target.value}))} options={[{value:"daily",label:"Quotidien"},{value:"specific",label:"Jours spécifiques"}]}/>
             {d.freq==="specific" && (
               <div>
-                <div style={{fontSize:11,color:C.text3,fontWeight:700,marginBottom:8}}>JOURS</div>
+                <div style={{fontSize:11,color:C.text3,fontWeight:600,marginBottom:8,letterSpacing:0.4}}>JOURS</div>
                 <div style={{display:"flex",gap:6}}>
                   {DAY_NAMES.map((n,i)=>(
-                    <button key={i} onClick={()=>setD(p=>({...p,days:p.days.includes(i)?p.days.filter(x=>x!==i):[...p.days,i]}))} style={{flex:1,padding:"8px 0",borderRadius:8,border:`1px solid ${d.days.includes(i)?C.gold:C.border2}`,background:d.days.includes(i)?C.gold+"25":"transparent",color:d.days.includes(i)?C.gold:C.text3,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{n}</button>
+                    <button key={i} onClick={()=>setD(p=>({...p,days:p.days.includes(i)?p.days.filter(x=>x!==i):[...p.days,i]}))} style={{flex:1,padding:"8px 0",borderRadius:8,border:`1px solid ${d.days.includes(i)?C.gold:C.border2}`,background:d.days.includes(i)?C.gold+"18":"transparent",color:d.days.includes(i)?C.gold:C.text3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:FONT}}>{n}</button>
                   ))}
                 </div>
               </div>
             )}
-            <button onClick={()=>setD(p=>({...p,nn:!p.nn}))} style={{padding:"12px",borderRadius:10,border:`1px solid ${d.nn?C.red:C.border2}`,background:d.nn?C.red+"18":"transparent",color:d.nn?C.red:C.text3,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
-              <div style={{fontWeight:800}}>{d.nn?"✓ ":""}Non-négociable</div>
-              <div style={{fontSize:11,fontWeight:500,marginTop:3,opacity:0.8}}>Si ratée, score plafonné à 70%</div>
+            <button onClick={()=>setD(p=>({...p,nn:!p.nn}))} style={{padding:"12px",borderRadius:10,border:`1px solid ${d.nn?C.red:C.border2}`,background:d.nn?C.red+"14":"transparent",color:d.nn?C.red:C.text3,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:FONT,textAlign:"left"}}>
+              <div style={{fontWeight:700,display:"inline-flex",alignItems:"center",gap:6}}>
+                {d.nn && <Icon name="check" size={12}/>}Non-négociable
+              </div>
+              <div style={{fontSize:11,fontWeight:400,marginTop:3,opacity:0.85}}>Si ratée, score plafonné à 70%</div>
             </button>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>setForm(null)} variant="ghost" style={{flex:1}}>Annuler</Btn>
@@ -1384,7 +1584,6 @@ function RoutineSection({back, habits, setHabits}) {
   );
 }
 
-// ── Focus
 function FocusSection({back, workSess, setWorkSess, tasks, activeDayKey}) {
   const [running,setRunning] = useState(false);
   const [elapsed,setElapsed] = useState(0);
@@ -1421,38 +1620,38 @@ function FocusSection({back, workSess, setWorkSess, tasks, activeDayKey}) {
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
       <BackBtn back={back} title="Focus"/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Card style={{textAlign:"center",padding:14}}><div style={{fontSize:26,fontWeight:900,color:C.blue}}>{fmtMin(todayMin)||"0m"}</div><div style={{fontSize:10,color:C.text4}}>Aujourd'hui</div></Card>
-        <Card style={{textAlign:"center",padding:14}}><div style={{fontSize:26,fontWeight:900,color:C.purple}}>{fmtMin(weekMin)||"0m"}</div><div style={{fontSize:10,color:C.text4}}>Cette semaine</div></Card>
+        <Card style={{textAlign:"center",padding:14}}><div style={{fontSize:26,fontWeight:800,color:C.gold,letterSpacing:-0.7}}>{fmtMin(todayMin)||"0m"}</div><div style={{fontSize:10,color:C.text4,fontWeight:500,marginTop:3}}>Aujourd'hui</div></Card>
+        <Card style={{textAlign:"center",padding:14}}><div style={{fontSize:26,fontWeight:800,color:C.green,letterSpacing:-0.7}}>{fmtMin(weekMin)||"0m"}</div><div style={{fontSize:10,color:C.text4,fontWeight:500,marginTop:3}}>Cette semaine</div></Card>
       </div>
       <Card glow>
         {targetMin>0 && <div style={{marginBottom:12}}><PBar value={pct} color={C.gold} h={6}/><div style={{fontSize:10,color:C.text3,textAlign:"right",marginTop:3}}>{Math.round(pct)}% · {fmtMin(Math.max(0,targetMin-Math.floor(elapsed/60)))} restant</div></div>}
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
-          <div style={{fontSize:40,fontWeight:900,fontVariantNumeric:"tabular-nums",flex:1,color:running?C.gold:C.text,letterSpacing:-1}}>{fmt(elapsed)}</div>
-          {running ? <Btn onClick={()=>stop()} variant="danger" style={{padding:"10px 20px",fontSize:14}}>■ Stop</Btn>
-                   : <Btn onClick={()=>start()} style={{padding:"10px 20px",fontSize:14}}>▶ Start</Btn>}
+          <div style={{fontSize:40,fontWeight:800,fontVariantNumeric:"tabular-nums",flex:1,color:running?C.gold:C.text,letterSpacing:-1.5}}>{fmt(elapsed)}</div>
+          {running ? <Btn onClick={()=>stop()} variant="danger" style={{padding:"10px 18px"}}><Icon name="stop" size={14}/> Stop</Btn>
+                   : <Btn onClick={()=>start()} style={{padding:"10px 18px"}}><Icon name="play" size={14}/> Start</Btn>}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
-          <FSelect label="Tâche liée" value={selTask} onChange={e=>setSelTask(e.target.value)} options={[{value:"",label:"— Libre —"},...tasks.filter(t=>!t.done).map(t=>({value:t.title,label:t.title}))]}/>
-          <FInput label="Focus" value={focus} onChange={e=>setFocus(e.target.value)} placeholder="Sur quoi tu te concentres ?"/>
+          <FSelect label="TÂCHE LIÉE" value={selTask} onChange={e=>setSelTask(e.target.value)} options={[{value:"",label:"— Libre —"},...tasks.filter(t=>!t.done).map(t=>({value:t.title,label:t.title}))]}/>
+          <FInput label="FOCUS" value={focus} onChange={e=>setFocus(e.target.value)} placeholder="Sur quoi tu te concentres ?"/>
         </div>
-        <div style={{fontSize:11,fontWeight:700,color:C.text3,marginBottom:8}}>BLOC RAPIDE</div>
+        <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:8,letterSpacing:0.4}}>BLOC RAPIDE</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
-          {[30,60,120].map(m=><Btn key={m} onClick={()=>start(m)} variant="ghost" disabled={running} style={{padding:"12px",fontSize:15,fontWeight:800}}>{m<60?`${m}m`:`${m/60}h`}</Btn>)}
+          {[30,60,120].map(m=><Btn key={m} onClick={()=>start(m)} variant="ghost" disabled={running} style={{padding:"12px",fontSize:14,fontWeight:700}}>{m<60?`${m}m`:`${m/60}h`}</Btn>)}
         </div>
         <div style={{display:"flex",gap:8}}>
-          <input value={custom} onChange={e=>setCustom(e.target.value)} type="number" placeholder="Personnalisé (min)" style={{flex:1,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 14px",fontSize:14,outline:"none",fontFamily:"inherit"}}/>
-          <Btn onClick={()=>custom&&start(Number(custom))} disabled={running} variant="ghost" style={{padding:"10px 16px"}}>▶</Btn>
+          <input value={custom} onChange={e=>setCustom(e.target.value)} type="number" placeholder="Personnalisé (min)" style={{flex:1,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 14px",fontSize:14,outline:"none",fontFamily:FONT}}/>
+          <Btn onClick={()=>custom&&start(Number(custom))} disabled={running} variant="ghost" style={{padding:"10px 14px"}}><Icon name="play" size={14}/></Btn>
         </div>
       </Card>
       <Card>
-        <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:1,marginBottom:12}}>FOCUS 7 JOURS</div>
+        <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:12}}>FOCUS · 7 JOURS</div>
         <div style={{display:"flex",alignItems:"flex-end",gap:6,height:80}}>
           {last7Work.map(({d,min})=>{
             const maxM=Math.max(...last7Work.map(x=>x.min),120);
             return (
               <div key={d} style={{flex:1,textAlign:"center"}}>
                 <div style={{height:`${Math.max(min>0?(min/maxM)*66:0,min>0?4:0)}px`,background:min>=120?C.gold:min>0?C.gold+"60":C.border,borderRadius:"4px 4px 0 0",marginBottom:4,transition:"height .5s"}}/>
-                <div style={{fontSize:9,color:C.text4}}>{DAY_NAMES[parseDate(d).getDay()]}</div>
+                <div style={{fontSize:9,color:C.text4,fontWeight:500}}>{DAY_NAMES[parseDate(d).getDay()]}</div>
                 {min>0&&<div style={{fontSize:9,color:C.text3}}>{fmtMin(min)}</div>}
               </div>
             );
@@ -1461,10 +1660,10 @@ function FocusSection({back, workSess, setWorkSess, tasks, activeDayKey}) {
       </Card>
       {workSess.filter(s=>s.date===activeDayKey).length>0 && (
         <Card>
-          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:1,marginBottom:10}}>SESSIONS DU JOUR</div>
+          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:10}}>SESSIONS DU JOUR</div>
           {workSess.filter(s=>s.date===activeDayKey).map(s=>(
             <div key={s.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-              <div><div style={{fontWeight:600}}>{s.task||s.focus||"Session libre"}</div>{s.focus&&s.task&&<div style={{fontSize:11,color:C.text3}}>{s.focus}</div>}</div>
+              <div><div style={{fontWeight:500}}>{s.task||s.focus||"Session libre"}</div>{s.focus&&s.task&&<div style={{fontSize:11,color:C.text3}}>{s.focus}</div>}</div>
               <span style={{color:C.gold,fontWeight:700}}>{fmtMin(s.duration)}</span>
             </div>
           ))}
@@ -1474,35 +1673,34 @@ function FocusSection({back, workSess, setWorkSess, tasks, activeDayKey}) {
   );
 }
 
-// ── Profile
 function ProfileSection({back, profile, setProfile}) {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
       <BackBtn back={back} title="Profil"/>
       <Card>
-        <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:1,marginBottom:14}}>DONNÉES PERSONNELLES</div>
+        <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:14}}>DONNÉES PERSONNELLES</div>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <FInput label="Âge" value={profile.age||""} onChange={e=>setProfile(p=>({...p,age:e.target.value}))} type="number" placeholder="25"/>
-            <FInput label="Poids (kg)" value={profile.weight||""} onChange={e=>setProfile(p=>({...p,weight:e.target.value}))} type="number" placeholder="75"/>
+            <FInput label="ÂGE" value={profile.age||""} onChange={e=>setProfile(p=>({...p,age:e.target.value}))} type="number" placeholder="25"/>
+            <FInput label="POIDS (KG)" value={profile.weight||""} onChange={e=>setProfile(p=>({...p,weight:e.target.value}))} type="number" placeholder="75"/>
           </div>
-          <FInput label="Taille (cm)" value={profile.height||""} onChange={e=>setProfile(p=>({...p,height:e.target.value}))} type="number" placeholder="180"/>
-          <FText label="OBJECTIF PRINCIPAL" value={profile.goal||""} onChange={e=>setProfile(p=>({...p,goal:e.target.value}))} placeholder="Monaco-Nice, développer mon business..."/>
-          <FInput label="Business / Projets actifs" value={profile.business||""} onChange={e=>setProfile(p=>({...p,business:e.target.value}))} placeholder="Agency 5Stars, Visa Focus..."/>
+          <FInput label="TAILLE (CM)" value={profile.height||""} onChange={e=>setProfile(p=>({...p,height:e.target.value}))} type="number" placeholder="180"/>
+          <FText label="OBJECTIF PRINCIPAL" value={profile.goal||""} onChange={e=>setProfile(p=>({...p,goal:e.target.value}))} placeholder="Monaco-Nice, développer mon business…"/>
+          <FInput label="BUSINESS / PROJETS ACTIFS" value={profile.business||""} onChange={e=>setProfile(p=>({...p,business:e.target.value}))} placeholder="Agency 5Stars, Visa Focus…"/>
         </div>
       </Card>
-      <Card style={{background:C.green+"10",border:`1px solid ${C.green}30`,fontSize:12,color:C.text2,lineHeight:1.6}}>
-        💡 Ces données personnalisent les conseils de Growth Agent en temps réel — il les utilise dans chaque réponse.
+      <Card style={{background:C.green+"0a",border:`1px solid ${C.green}25`,fontSize:12,color:C.text2,lineHeight:1.6,display:"flex",alignItems:"flex-start",gap:10}}>
+        <Icon name="sparkles" size={14} color={C.green} style={{flexShrink:0,marginTop:2}}/>
+        <div>Ces données personnalisent les conseils de Growth Agent en temps réel — il les utilise dans chaque réponse.</div>
       </Card>
     </div>
   );
 }
 
-// ── Goals 2026
 const GOAL_LEVELS = [
   {id:"short", label:"Court terme", sub:"1-3 mois", color:C.green},
   {id:"mid",   label:"Moyen terme", sub:"3-12 mois", color:C.gold},
-  {id:"long",  label:"Long terme",  sub:"2026 entier", color:C.purple},
+  {id:"long",  label:"Long terme",  sub:"2026 entier", color:C.text2},
 ];
 
 function GoalsSection({back, goals, setGoals}) {
@@ -1523,19 +1721,21 @@ function GoalsSection({back, goals, setGoals}) {
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
         <BackBtn back={back} title="Objectifs 2026"/>
-        <Btn onClick={()=>{setD(empty);setForm("new");}}>+ Objectif</Btn>
+        <Btn onClick={()=>{setD(empty);setForm("new");}}><Icon name="plus" size={14}/> Objectif</Btn>
       </div>
 
       {goals.length === 0 && (
-        <Card style={{padding:20,background:`linear-gradient(135deg, ${C.gold}10, transparent)`,border:`1px solid ${C.gold}30`}}>
-          <div style={{fontSize:16,fontWeight:800,color:C.gold,marginBottom:6}}>🎯 Définis tes objectifs 2026</div>
+        <Card style={{padding:20,background:`linear-gradient(135deg, ${C.gold}0a, transparent)`,border:`1px solid ${C.gold}25`}}>
+          <div style={{fontSize:15,fontWeight:700,color:C.gold,marginBottom:8,display:"inline-flex",alignItems:"center",gap:8,letterSpacing:-0.3}}>
+            <Icon name="target" size={16}/> Définis tes objectifs 2026
+          </div>
           <div style={{fontSize:13,color:C.text2,lineHeight:1.6}}>
             Structure ta progression sur 3 horizons temporels.
           </div>
           <ul style={{margin:"10px 0 0",paddingLeft:18,fontSize:12,color:C.text3,lineHeight:1.7}}>
             <li><b style={{color:C.green}}>Court terme</b> : actions concrètes sur 1-3 mois</li>
             <li><b style={{color:C.gold}}>Moyen terme</b> : jalons importants 3-12 mois</li>
-            <li><b style={{color:C.purple}}>Long terme</b> : vision 2026 entière</li>
+            <li><b style={{color:C.text2}}>Long terme</b> : vision 2026 entière</li>
           </ul>
         </Card>
       )}
@@ -1544,9 +1744,9 @@ function GoalsSection({back, goals, setGoals}) {
         <div key={lv.id}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,padding:"0 4px"}}>
             <div style={{width:6,height:6,borderRadius:"50%",background:lv.color}}/>
-            <div style={{fontSize:12,fontWeight:800,color:lv.color,letterSpacing:0.8}}>{lv.label.toUpperCase()}</div>
-            <div style={{fontSize:11,color:C.text4}}>· {lv.sub}</div>
-            <div style={{fontSize:11,color:C.text4,marginLeft:"auto"}}>{lv.items.length}</div>
+            <div style={{fontSize:12,fontWeight:700,color:lv.color,letterSpacing:0.6}}>{lv.label.toUpperCase()}</div>
+            <div style={{fontSize:11,color:C.text4,fontWeight:500}}>· {lv.sub}</div>
+            <div style={{fontSize:11,color:C.text4,marginLeft:"auto",fontWeight:500}}>{lv.items.length}</div>
           </div>
           {lv.items.length === 0 ? (
             <Card style={{padding:"12px 14px",fontSize:12,color:C.text4,textAlign:"center",background:C.card2}}>Aucun objectif</Card>
@@ -1559,24 +1759,24 @@ function GoalsSection({back, goals, setGoals}) {
                   <Card key={g.id} style={{padding:14}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:700,fontSize:15}}>{g.title}</div>
+                        <div style={{fontWeight:600,fontSize:15,letterSpacing:-0.2}}>{g.title}</div>
                         {g.why && <div style={{fontSize:12,color:C.text3,marginTop:4,fontStyle:"italic"}}>"{g.why}"</div>}
                       </div>
-                      <div style={{display:"flex",gap:2,flexShrink:0}}>
-                        <button onClick={()=>{setD({...g});setForm("edit");}} style={iconBtn}>✏</button>
-                        <button onClick={()=>setGoals(p=>p.filter(x=>x.id!==g.id))} style={iconBtn}>🗑</button>
+                      <div style={{display:"flex",gap:1,flexShrink:0}}>
+                        <IconBtn name="edit" onClick={()=>{setD({...g});setForm("edit");}}/>
+                        <IconBtn name="trash" onClick={()=>setGoals(p=>p.filter(x=>x.id!==g.id))}/>
                       </div>
                     </div>
                     {t > 0 && (
                       <>
                         <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.text3,marginBottom:5}}>
                           <span>{g.metric||"Progression"}</span>
-                          <span style={{fontWeight:800,color:lv.color}}>{cu}/{t} · {pct}%</span>
+                          <span style={{fontWeight:700,color:lv.color}}>{cu}/{t} · {pct}%</span>
                         </div>
                         <PBar value={pct} color={lv.color} h={5}/>
                       </>
                     )}
-                    {g.dueDate && <div style={{fontSize:11,color:C.text4,marginTop:8}}>📅 {fmtShort(g.dueDate)}</div>}
+                    {g.dueDate && <div style={{fontSize:11,color:C.text4,marginTop:8,display:"inline-flex",alignItems:"center",gap:4}}><Icon name="calendar" size={11}/> {fmtShort(g.dueDate)}</div>}
                   </Card>
                 );
               })}
@@ -1588,18 +1788,19 @@ function GoalsSection({back, goals, setGoals}) {
       {form && (
         <Modal title={d.id?"Modifier l'objectif":"Nouvel objectif"} onClose={()=>setForm(null)} wide>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <div style={{background:C.green+"10",border:`1px solid ${C.green}30`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.text2,lineHeight:1.6}}>
-              💡 <b>Un bon objectif est spécifique et mesurable.</b> Pas "gagner plus" mais "5 nouveaux clients d'ici juin".
+            <div style={{background:C.green+"0a",border:`1px solid ${C.green}25`,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.text2,lineHeight:1.6,display:"flex",alignItems:"flex-start",gap:8}}>
+              <Icon name="sparkles" size={13} color={C.green} style={{flexShrink:0,marginTop:2}}/>
+              <div><b>Un bon objectif est spécifique et mesurable.</b> Pas "gagner plus" mais "5 nouveaux clients d'ici juin".</div>
             </div>
-            <FInput label="Objectif *" value={d.title} onChange={e=>setD(p=>({...p,title:e.target.value}))} placeholder="Ex: Courir 180km au total (Monaco-Nice)"/>
-            <FSelect label="Horizon" value={d.level} onChange={e=>setD(p=>({...p,level:e.target.value}))} options={GOAL_LEVELS.map(l=>({value:l.id,label:`${l.label} · ${l.sub}`}))}/>
-            <FText label="Pourquoi c'est important ?" value={d.why} onChange={e=>setD(p=>({...p,why:e.target.value}))} placeholder="Raison profonde, motivation..." rows={2}/>
+            <FInput label="OBJECTIF *" value={d.title} onChange={e=>setD(p=>({...p,title:e.target.value}))} placeholder="Ex: Courir 180km au total (Monaco-Nice)"/>
+            <FSelect label="HORIZON" value={d.level} onChange={e=>setD(p=>({...p,level:e.target.value}))} options={GOAL_LEVELS.map(l=>({value:l.id,label:`${l.label} · ${l.sub}`}))}/>
+            <FText label="POURQUOI C'EST IMPORTANT ?" value={d.why} onChange={e=>setD(p=>({...p,why:e.target.value}))} placeholder="Raison profonde, motivation…" rows={2}/>
             <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:10}}>
-              <FInput label="Unité de mesure" value={d.metric} onChange={e=>setD(p=>({...p,metric:e.target.value}))} placeholder="km, clients, €..."/>
-              <FInput label="Cible" value={d.target} onChange={e=>setD(p=>({...p,target:e.target.value}))} type="number" placeholder="180"/>
-              <FInput label="Actuel" value={d.current} onChange={e=>setD(p=>({...p,current:e.target.value}))} type="number" placeholder="0"/>
+              <FInput label="UNITÉ" value={d.metric} onChange={e=>setD(p=>({...p,metric:e.target.value}))} placeholder="km, clients, €…"/>
+              <FInput label="CIBLE" value={d.target} onChange={e=>setD(p=>({...p,target:e.target.value}))} type="number" placeholder="180"/>
+              <FInput label="ACTUEL" value={d.current} onChange={e=>setD(p=>({...p,current:e.target.value}))} type="number" placeholder="0"/>
             </div>
-            <FInput label="Échéance" value={d.dueDate} onChange={e=>setD(p=>({...p,dueDate:e.target.value}))} type="date"/>
+            <FInput label="ÉCHÉANCE" value={d.dueDate} onChange={e=>setD(p=>({...p,dueDate:e.target.value}))} type="date"/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>setForm(null)} variant="ghost" style={{flex:1}}>Annuler</Btn>
               <Btn onClick={save} style={{flex:2}}>Enregistrer</Btn>
