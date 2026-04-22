@@ -32,22 +32,26 @@ function useFS(key, def) {
   return [val, set, rdy];
 }
 
-// ─── DESIGN TOKENS (DARK / GOLD / GREEN) ─────────────────────────────────────
+// ─── DESIGN TOKENS (DARK / GOLD / NEON-GREEN) ────────────────────────────────
+// Premium palette — deep near-black base, soft neon green as the hero accent,
+// warm gold as the secondary. Muted reds. Glass-friendly surface tokens.
 const C = {
-  bg:     "#05080d",
-  bg2:    "#0a0f17",
-  card:   "#0f141c",
-  card2:  "#0c1118",
-  border: "#1a2130",
-  border2:"#262e40",
-  text:   "#e8edf5",
-  text2:  "#a3acba",
-  text3:  "#6e7685",
-  text4:  "#464d5c",
+  bg:     "#05070b",          // page: deeper near-black
+  bg2:    "#090d14",          // input surfaces
+  card:   "rgba(20, 26, 36, 0.72)",   // glass card (requires backdrop-filter)
+  cardS:  "#121821",          // solid card fallback (for tiny ui)
+  card2:  "#0d121b",          // nested cards
+  border: "rgba(255,255,255,0.06)",   // hairline
+  border2:"rgba(255,255,255,0.10)",   // emphasized hairline
+  text:   "#eef2f7",
+  text2:  "#a6b0c0",
+  text3:  "#707a8c",
+  text4:  "#474f5f",
   gold:   "#f5c056",
   goldD:  "#d4a73e",
-  green:  "#10b981",
-  greenD: "#0d9668",
+  green:  "#22d3a0",          // softer neon green
+  greenD: "#0f9c75",
+  greenG: "#7cf2c8",          // highlight/glow edge
   red:    "#e5484d",
 };
 const FONT = "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
@@ -187,21 +191,42 @@ const heatColor = (pct, hasData) => {
 const heatTextColor = pct => pct >= 85 ? "#00140a" : C.text2;
 
 // ─── UI PRIMITIVES ────────────────────────────────────────────────────────────
-const Card = ({children,style={},glow=false}) => (
-  <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16,
-    boxShadow: glow ? "0 0 0 1px rgba(245,192,86,0.06), 0 8px 32px -16px rgba(245,192,86,0.12)" : "none",
-    ...style}}>{children}</div>
+// Card: glass surface with subtle gradient + hairline border.
+// `glow` adds a soft neon green halo for emphasis (hero cards, today score).
+const Card = ({children,style={},glow=false,onClick,className=""}) => (
+  <div onClick={onClick} className={`growth-card ${className}`} style={{
+    background:C.card,
+    border:`1px solid ${C.border}`,
+    borderRadius:18,
+    padding:16,
+    backdropFilter:"blur(14px)",
+    WebkitBackdropFilter:"blur(14px)",
+    boxShadow: glow
+      ? "0 0 0 1px rgba(34,211,160,0.10), 0 18px 48px -24px rgba(34,211,160,0.35), inset 0 1px 0 rgba(255,255,255,0.04)"
+      : "0 10px 30px -18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03)",
+    transition:"border-color .2s, box-shadow .25s, transform .2s",
+    ...style
+  }}>{children}</div>
 );
 
 const Btn = ({children,onClick,variant="primary",style={},disabled=false,type="button"}) => {
   const styles = {
-    primary: {background:C.gold,color:"#0a0a0a",fontWeight:700,boxShadow:"0 4px 14px -6px rgba(245,192,86,0.4)"},
-    green:   {background:C.green,color:"#001a10",fontWeight:700,boxShadow:"0 4px 14px -6px rgba(16,185,129,0.4)"},
-    ghost:   {background:C.card,color:C.text2,fontWeight:600,border:`1px solid ${C.border2}`},
+    primary: {background:`linear-gradient(135deg, ${C.gold}, ${C.goldD})`,color:"#0a0a0a",fontWeight:700,boxShadow:"0 8px 24px -10px rgba(245,192,86,0.55), inset 0 1px 0 rgba(255,255,255,0.25)"},
+    green:   {background:`linear-gradient(135deg, ${C.greenG}, ${C.green})`,color:"#002616",fontWeight:700,boxShadow:"0 8px 24px -10px rgba(34,211,160,0.5), inset 0 1px 0 rgba(255,255,255,0.25)"},
+    ghost:   {background:C.cardS,color:C.text2,fontWeight:600,border:`1px solid ${C.border2}`},
     outline: {background:"transparent",color:C.text,fontWeight:600,border:`1px solid ${C.border2}`},
-    danger:  {background:"rgba(229,72,77,.1)",color:C.red,fontWeight:600,border:`1px solid ${C.red}30`},
+    danger:  {background:"rgba(229,72,77,.10)",color:C.red,fontWeight:600,border:`1px solid ${C.red}30`},
   };
-  return <button type={type} onClick={onClick} disabled={disabled} style={{...styles[variant],border:styles[variant].border||"none",borderRadius:10,padding:"10px 16px",fontSize:13,cursor:disabled?"not-allowed":"pointer",fontFamily:FONT,opacity:disabled?0.5:1,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,letterSpacing:-0.1,...style}}>{children}</button>;
+  return <button type={type} onClick={onClick} disabled={disabled} style={{
+    ...styles[variant],
+    border:styles[variant].border||"none",
+    borderRadius:12,padding:"10px 16px",fontSize:13,
+    cursor:disabled?"not-allowed":"pointer",fontFamily:FONT,
+    opacity:disabled?0.5:1,
+    transition:"transform .12s cubic-bezier(.2,.8,.2,1), box-shadow .2s, filter .2s",
+    display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,letterSpacing:-0.1,
+    ...style
+  }}>{children}</button>;
 };
 
 const FInput = ({label,value,onChange,type="text",placeholder="",style={}}) => (
@@ -250,8 +275,17 @@ const IconBtn = ({name,onClick,title,color=C.text3,size=16,style={}}) => (
 );
 
 const Modal = ({title,onClose,children,wide=false}) => (
-  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",backdropFilter:"blur(6px)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
-    <div style={{background:C.card,borderRadius:"20px 20px 0 0",padding:24,width:"100%",maxWidth:wide?780:640,maxHeight:"92vh",overflowY:"auto",border:`1px solid ${C.border2}`,borderBottom:"none",fontFamily:FONT}} onClick={e=>e.stopPropagation()}>
+  <div style={{position:"fixed",inset:0,background:"rgba(2,4,8,0.74)",backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",zIndex:500,display:"flex",alignItems:"flex-end",justifyContent:"center",animation:"fadeIn .18s ease-out"}} onClick={onClose}>
+    <div style={{
+      background:C.card,
+      borderRadius:"24px 24px 0 0",
+      padding:24,width:"100%",maxWidth:wide?780:640,maxHeight:"92vh",overflowY:"auto",
+      border:`1px solid ${C.border2}`,borderBottom:"none",fontFamily:FONT,
+      backdropFilter:"blur(20px)",WebkitBackdropFilter:"blur(20px)",
+      boxShadow:"0 -24px 80px -20px rgba(0,0,0,0.7)",
+      animation:"sheetUp .3s cubic-bezier(.2,.8,.2,1)",
+    }} onClick={e=>e.stopPropagation()}>
+      <div style={{width:38,height:4,borderRadius:99,background:C.border2,margin:"0 auto 16px"}}/>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
         <span style={{fontWeight:700,fontSize:18,letterSpacing:-0.3}}>{title}</span>
         <IconBtn name="x" onClick={onClose} size={18}/>
@@ -432,20 +466,24 @@ export default function App() {
           <Logo size={32}/>
           <div style={{fontWeight:800,fontSize:19,letterSpacing:-0.6,color:C.text}}>Growth</div>
         </div>
-        {TABS.map(t=>(
-          <button key={t.id} onClick={()=>setTab(t.id)} className="growth-side-tab" style={{
-            background: tab===t.id ? `linear-gradient(90deg, ${C.gold}16, transparent)` : "transparent",
-            color: tab===t.id ? C.gold : C.text2,
-            borderLeft: tab===t.id ? `2px solid ${C.gold}` : "2px solid transparent",
-          }}>
-            <Icon name={t.icon} size={17}/>
-            <span style={{fontSize:13,fontWeight:500,letterSpacing:-0.1}}>{t.l}</span>
-          </button>
-        ))}
+        {TABS.map(t=>{
+          const on = tab===t.id;
+          return (
+            <button key={t.id} onClick={()=>setTab(t.id)} className="growth-side-tab" style={{
+              background: on ? `linear-gradient(90deg, ${C.green}14, transparent 80%)` : "transparent",
+              color: on ? C.green : C.text2,
+              boxShadow: on ? `inset 2px 0 0 ${C.green}` : "inset 2px 0 0 transparent",
+            }}>
+              <Icon name={t.icon} size={17}/>
+              <span style={{fontSize:13,fontWeight:on?600:500,letterSpacing:-0.1}}>{t.l}</span>
+            </button>
+          );
+        })}
         <div style={{flex:1}}/>
-        <div style={{padding:"12px 10px",fontSize:11,color:C.text4,borderTop:`1px solid ${C.border}`}}>
-          <div style={{marginBottom:4,fontWeight:500}}>Score du jour</div>
-          <div style={{fontSize:24,fontWeight:800,color:todayScore.nnOk?C.gold:C.red,letterSpacing:-0.5}}>{todayScore.pct}%</div>
+        <div style={{padding:"14px 12px",fontSize:11,color:C.text4,borderTop:`1px solid ${C.border}`,marginTop:8}}>
+          <div style={{marginBottom:6,fontWeight:600,letterSpacing:0.6,textTransform:"uppercase",fontSize:10,color:C.text3}}>Score du jour</div>
+          <div style={{fontSize:28,fontWeight:800,color:todayScore.nnOk?C.green:C.red,letterSpacing:-0.6,textShadow:todayScore.nnOk?`0 0 24px ${C.green}55`:"none"}}>{todayScore.pct}%</div>
+          <div style={{fontSize:11,color:C.text3,marginTop:2,fontWeight:500}}>{todayScore.done}/{todayScore.total} complétés</div>
         </div>
       </aside>
 
@@ -456,8 +494,8 @@ export default function App() {
             <div style={{fontWeight:800,fontSize:17,letterSpacing:-0.5}}>Growth</div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:22,fontWeight:800,color:todayScore.nnOk?C.gold:C.red,lineHeight:1,letterSpacing:-0.5}}>{todayScore.pct}%</div>
-            <div style={{fontSize:10,color:C.text4,marginTop:2,fontWeight:500}}>{todayScore.done}/{todayScore.total} today</div>
+            <div style={{fontSize:24,fontWeight:800,color:todayScore.nnOk?C.green:C.red,lineHeight:1,letterSpacing:-0.6,textShadow:todayScore.nnOk?`0 0 16px ${C.green}44`:"none"}}>{todayScore.pct}%</div>
+            <div style={{fontSize:10,color:C.text4,marginTop:3,fontWeight:500,letterSpacing:0.3}}>{todayScore.done}/{todayScore.total} aujourd'hui</div>
           </div>
         </header>
 
@@ -468,13 +506,18 @@ export default function App() {
           {tab==="me"      && <MeTab {...shared}/>}
         </main>
 
-        <nav className="growth-bottom">
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",padding:"4px 10px",color:tab===t.id?C.gold:C.text4,transition:"color .2s",fontFamily:FONT}}>
-              <Icon name={t.icon} size={18}/>
-              <span style={{fontSize:9,fontWeight:600,letterSpacing:0.4}}>{t.l.toUpperCase()}</span>
-            </button>
-          ))}
+        <nav className="growth-bottom" aria-label="Navigation principale">
+          <div className="growth-bottom-inner">
+            {TABS.map(t=>{
+              const on = tab===t.id;
+              return (
+                <button key={t.id} onClick={()=>setTab(t.id)} className={`growth-bottom-tab ${on?"on":""}`} aria-current={on?"page":undefined}>
+                  <span className="growth-bottom-tab-icon"><Icon name={t.icon} size={19}/></span>
+                  <span className="growth-bottom-tab-label">{t.l}</span>
+                </button>
+              );
+            })}
+          </div>
         </nav>
       </div>
 
@@ -484,22 +527,93 @@ export default function App() {
       <style>{`
         *{box-sizing:border-box}
         html,body{margin:0;background:${C.bg};font-family:${FONT};-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+        body{
+          background:
+            radial-gradient(1200px 600px at 100% -10%, rgba(34,211,160,0.06), transparent 60%),
+            radial-gradient(900px 500px at -10% 110%, rgba(245,192,86,0.05), transparent 55%),
+            ${C.bg};
+          background-attachment:fixed;
+        }
         input,select,textarea,button{font-family:${FONT}}
-        ::-webkit-scrollbar{width:4px;height:4px}
+        ::selection{background:${C.green}33;color:${C.text}}
+        ::-webkit-scrollbar{width:6px;height:6px}
         ::-webkit-scrollbar-thumb{background:${C.border2};border-radius:99px}
+        ::-webkit-scrollbar-thumb:hover{background:${C.text4}}
         input[type=range]{-webkit-appearance:none;width:100%;height:4px;border-radius:99px;outline:none;background:${C.border2}}
-        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;cursor:pointer;background:${C.gold}}
+        input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;cursor:pointer;background:${C.green};box-shadow:0 0 0 4px ${C.green}22}
         input[type=date],input[type=time]{color-scheme:dark}
-        input:focus,select:focus,textarea:focus{border-color:${C.gold}!important}
-        button:hover:not(:disabled){filter:brightness(1.08)}
+        input:focus,select:focus,textarea:focus{border-color:${C.green}!important;box-shadow:0 0 0 3px ${C.green}1a}
+        button{transition:transform .12s cubic-bezier(.2,.8,.2,1), filter .2s, box-shadow .2s}
+        button:hover:not(:disabled){filter:brightness(1.06)}
+        button:active:not(:disabled){transform:translateY(0.5px) scale(0.99)}
 
-        .growth-app{min-height:100vh;background:${C.bg};color:${C.text};font-family:${FONT};display:flex;letter-spacing:-0.1px}
-        .growth-side{display:none;width:220px;flex-direction:column;padding:18px 12px;border-right:1px solid ${C.border};position:sticky;top:0;height:100vh}
-        .growth-side-tab{display:flex;align-items:center;gap:12px;padding:10px 12px;margin-bottom:2px;border:none;background:none;cursor:pointer;border-radius:10px;text-align:left;font-family:${FONT}}
+        .growth-app{min-height:100vh;background:transparent;color:${C.text};font-family:${FONT};display:flex;letter-spacing:-0.1px}
+        .growth-side{
+          display:none;width:220px;flex-direction:column;padding:18px 12px;
+          border-right:1px solid ${C.border};
+          position:sticky;top:0;height:100vh;
+          background:linear-gradient(180deg, rgba(34,211,160,0.02), transparent 40%);
+          backdrop-filter:blur(14px);
+        }
+        .growth-side-tab{
+          display:flex;align-items:center;gap:12px;
+          padding:11px 14px;margin-bottom:4px;
+          border:none;background:none;cursor:pointer;border-radius:12px;
+          text-align:left;font-family:${FONT};
+          transition:background .2s, color .2s;
+        }
+        .growth-side-tab:hover{background:${C.border}!important}
         .growth-column{flex:1;display:flex;flex-direction:column;min-width:0;max-width:100%}
-        .growth-header{padding:14px 20px 10px;border-bottom:1px solid ${C.border};display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:${C.bg};z-index:100;backdrop-filter:blur(8px)}
-        .growth-main{flex:1;padding:20px 18px 14px;overflow-y:auto;max-width:920px;width:100%;margin:0 auto}
-        .growth-bottom{border-top:1px solid ${C.border};background:${C.bg};position:sticky;bottom:0;z-index:100;display:flex;justify-content:space-around;padding:8px 0 14px}
+        .growth-header{
+          padding:14px 18px 12px;
+          display:flex;align-items:center;justify-content:space-between;
+          position:sticky;top:0;z-index:100;
+          background:rgba(5,7,11,0.72);
+          backdrop-filter:saturate(180%) blur(14px);
+          -webkit-backdrop-filter:saturate(180%) blur(14px);
+          border-bottom:1px solid ${C.border};
+        }
+        .growth-main{flex:1;padding:20px 16px 96px;overflow-y:auto;max-width:920px;width:100%;margin:0 auto}
+        @media (min-width:520px){.growth-main{padding:24px 22px 96px}}
+
+        /* Floating bottom nav — glassy, pill-shaped, safe-area aware */
+        .growth-bottom{
+          position:fixed;left:0;right:0;bottom:0;z-index:100;
+          padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+          pointer-events:none;
+        }
+        .growth-bottom-inner{
+          pointer-events:auto;
+          display:flex;justify-content:space-around;align-items:center;gap:4px;
+          max-width:520px;margin:0 auto;
+          background:rgba(12,15,22,0.72);
+          border:1px solid ${C.border2};
+          border-radius:22px;padding:7px 8px;
+          backdrop-filter:saturate(180%) blur(20px);
+          -webkit-backdrop-filter:saturate(180%) blur(20px);
+          box-shadow:0 18px 40px -12px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.02), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .growth-bottom-tab{
+          flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+          padding:8px 6px 6px;background:none;border:none;cursor:pointer;
+          color:${C.text3};font-family:${FONT};
+          border-radius:16px;position:relative;
+          transition:color .2s, background .2s, transform .12s;
+        }
+        .growth-bottom-tab-icon{
+          display:inline-flex;align-items:center;justify-content:center;
+          width:34px;height:26px;border-radius:10px;
+          transition:background .2s, box-shadow .25s;
+        }
+        .growth-bottom-tab-label{
+          font-size:10px;font-weight:600;letter-spacing:0.2px;
+        }
+        .growth-bottom-tab.on{color:${C.green}}
+        .growth-bottom-tab.on .growth-bottom-tab-icon{
+          background:${C.green}1a;
+          box-shadow:0 0 0 1px ${C.green}30, 0 6px 16px -6px ${C.green}66;
+        }
+        .growth-bottom-tab:active{transform:scale(.94)}
 
         @media (min-width: 980px) {
           .growth-side{display:flex}
@@ -508,18 +622,25 @@ export default function App() {
           .growth-main{padding:28px 32px}
         }
 
-        /* Sleep grid: stacks cleanly on narrow screens */
+        /* Cards: hover lift on interactive surfaces (opt-in via .lift) */
+        .growth-card.lift:hover{transform:translateY(-1px);border-color:${C.border2}}
+
+        /* Sleep grid */
         .sleep-grid{display:grid;gap:10px;grid-template-columns:1fr 1fr 1fr}
         @media (max-width: 560px){
           .sleep-grid{grid-template-columns:1fr 1fr}
           .sleep-duration{grid-column:1 / -1}
         }
 
+        /* Animations */
         @keyframes b{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
         @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(229,72,77,.55)}70%{box-shadow:0 0 0 12px rgba(229,72,77,0)}100%{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
         @keyframes agentSlideUp{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes popIn{from{opacity:0;transform:translateY(-4px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes sheetUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes glow{0%,100%{box-shadow:0 0 0 0 ${C.green}00}50%{box-shadow:0 0 24px 2px ${C.green}33}}
 
         /* Floating AI assistant */
         .growth-fab{
@@ -527,33 +648,34 @@ export default function App() {
           width:56px; height:56px; border-radius:50%;
           background:linear-gradient(135deg, ${C.gold} 0%, ${C.goldD} 100%);
           color:${C.bg}; border:none; cursor:pointer;
-          box-shadow:0 10px 30px rgba(245,192,86,.35), 0 4px 10px rgba(0,0,0,.3);
+          box-shadow:0 14px 36px -10px rgba(245,192,86,.5), 0 0 0 4px rgba(245,192,86,0.08);
           display:flex; align-items:center; justify-content:center;
           transition:transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s;
         }
-        .growth-fab:hover{ transform:translateY(-2px) scale(1.04); box-shadow:0 14px 36px rgba(245,192,86,.45), 0 6px 14px rgba(0,0,0,.35); }
+        .growth-fab:hover{ transform:translateY(-2px) scale(1.04); box-shadow:0 18px 44px -10px rgba(245,192,86,.6), 0 0 0 5px rgba(245,192,86,0.10); }
         .growth-fab:active{ transform:translateY(0) scale(.97); }
         .growth-agent-panel{
-          position:fixed; right:24px; bottom:96px; z-index:60;
+          position:fixed; right:24px; bottom:24px; z-index:60;
           width:min(420px, calc(100vw - 32px));
-          height:min(640px, calc(100vh - 120px));
+          height:min(640px, calc(100vh - 48px));
           background:${C.card}; border:1px solid ${C.border2};
-          border-radius:18px; overflow:hidden;
-          box-shadow:0 24px 60px rgba(0,0,0,.6), 0 8px 20px rgba(0,0,0,.4);
+          border-radius:22px; overflow:hidden;
+          box-shadow:0 32px 80px rgba(0,0,0,.72), 0 10px 24px rgba(0,0,0,.4), 0 0 0 1px rgba(245,192,86,.04);
           display:flex; flex-direction:column;
+          backdrop-filter:blur(22px); -webkit-backdrop-filter:blur(22px);
         }
         @media (max-width: 900px){
-          .growth-fab{ right:16px; bottom:calc(64px + 12px); width:52px; height:52px; }
+          .growth-fab{ right:16px; bottom:calc(84px + env(safe-area-inset-bottom,0px)); width:52px; height:52px; }
           .growth-agent-panel{
-            right:8px; left:8px; bottom:calc(64px + 12px);
-            width:auto; height:min(78vh, 620px);
-            border-radius:16px;
+            right:10px; left:10px; bottom:calc(84px + env(safe-area-inset-bottom,0px));
+            width:auto; height:min(76vh, 620px);
+            border-radius:20px;
           }
         }
-        .growth-agent-backdrop{
-          position:fixed; inset:0; z-index:59;
-          background:rgba(5,8,13,.55); backdrop-filter:blur(4px);
-          animation:fadeIn .18s ease;
+
+        /* Respect reduced motion */
+        @media (prefers-reduced-motion: reduce){
+          *,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}
         }
       `}</style>
     </div>
@@ -578,7 +700,9 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
   const todayComp = completions[viewDay] || {};
   const sc = score(viewDay);
   const workMin = workSess.filter(s=>s.date===viewDay).reduce((a,b)=>a+(b.duration||0),0);
-  const dayTasks = tasks.filter(t=>t.scheduledFor===viewDay);
+  // Today bucket = explicit "add to today" (todayFor) OR naturally due (scheduledFor).
+  // todayFor is set by the "Add to today" action and never mutates the due date.
+  const dayTasks = tasks.filter(t => t.todayFor === viewDay || t.scheduledFor === viewDay);
 
   const byCategory = habits.reduce((acc,h) => {
     if (!isApplicable(h, viewDay)) return acc;
@@ -676,15 +800,21 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         </div>
       </Card>
 
-      {/* Score stats */}
+      {/* Score stats — hero metric cards */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Card style={{padding:14,textAlign:"center"}}>
-          <div style={{fontSize:30,fontWeight:800,color:sc.nnOk?C.gold:C.red,lineHeight:1,letterSpacing:-1}}>{sc.pct}%</div>
-          <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.5,marginTop:6}}>SCORE · {sc.done}/{sc.total}</div>
+        <Card glow={sc.nnOk} style={{padding:16,textAlign:"center",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",inset:0,background:sc.nnOk?`radial-gradient(circle at 50% 120%, ${C.green}1c, transparent 60%)`:`radial-gradient(circle at 50% 120%, ${C.red}22, transparent 60%)`,pointerEvents:"none"}}/>
+          <div style={{position:"relative"}}>
+            <div style={{fontSize:34,fontWeight:800,color:sc.nnOk?C.green:C.red,lineHeight:1,letterSpacing:-1.2,textShadow:sc.nnOk?`0 0 22px ${C.green}55`:"none"}}>{sc.pct}<span style={{fontSize:20,fontWeight:700,opacity:.6}}>%</span></div>
+            <div style={{fontSize:10,color:C.text3,fontWeight:700,letterSpacing:0.8,marginTop:8,textTransform:"uppercase"}}>Score · {sc.done}/{sc.total}</div>
+          </div>
         </Card>
-        <Card style={{padding:14,textAlign:"center",border:`1px solid ${sc.nnOk?C.border:C.red+"40"}`}}>
-          <div style={{fontSize:30,fontWeight:800,color:sc.nnOk?C.green:C.red,lineHeight:1,letterSpacing:-1}}>{sc.nnDone}/{sc.nnTotal}</div>
-          <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.5,marginTop:6}}>NON-NÉGOCIABLES</div>
+        <Card style={{padding:16,textAlign:"center",border:`1px solid ${sc.nnOk?C.border:C.red+"40"}`,position:"relative",overflow:"hidden"}}>
+          {!sc.nnOk && <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 120%, ${C.red}22, transparent 60%)`,pointerEvents:"none"}}/>}
+          <div style={{position:"relative"}}>
+            <div style={{fontSize:34,fontWeight:800,color:sc.nnOk?C.gold:C.red,lineHeight:1,letterSpacing:-1.2}}>{sc.nnDone}<span style={{opacity:.35,fontWeight:700}}>/{sc.nnTotal}</span></div>
+            <div style={{fontSize:10,color:C.text3,fontWeight:700,letterSpacing:0.8,marginTop:8,textTransform:"uppercase"}}>Non-négociables</div>
+          </div>
         </Card>
       </div>
 
@@ -704,24 +834,33 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
       {/* Today's tasks */}
       {dayTasks.length > 0 && (
         <Card>
-          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.8,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
-            <Icon name="listCheck" size={12}/> TÂCHES DU JOUR · {dayTasks.filter(t=>!t.done).length}/{dayTasks.length}
+          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:0.8,marginBottom:12,display:"flex",alignItems:"center",gap:6,textTransform:"uppercase"}}>
+            <Icon name="listCheck" size={12}/> Tâches du jour · {dayTasks.filter(t=>!t.done).length}/{dayTasks.length}
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:7}}>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {dayTasks.map(t => {
-              const p = PRIORITY[normPrio(t.priority||t.urgency)];
+              const prio = normPrio(t.priority||t.urgency);
+              const isHighPrio = prio === "high";
               return (
                 <button key={t.id} onClick={()=>toggleTask(t.id)} style={{
-                  display:"flex",alignItems:"center",gap:10,padding:"10px 12px",
-                  background:t.done?C.bg2:C.card2,
-                  border:`1px solid ${t.done?C.border:C.border2}`,
-                  borderRadius:10,cursor:"pointer",color:C.text,fontFamily:FONT,textAlign:"left"
+                  display:"flex",alignItems:"center",gap:11,padding:"11px 13px",
+                  background: t.done ? C.bg2 : C.card2,
+                  border:`1px solid ${t.done ? C.border : C.border2}`,
+                  borderLeft: isHighPrio && !t.done ? `2px solid ${C.red}` : `1px solid ${t.done?C.border:C.border2}`,
+                  borderRadius:12,cursor:"pointer",color:C.text,fontFamily:FONT,textAlign:"left",
+                  transition:"border-color .2s, background .2s, transform .12s",
                 }}>
-                  <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${t.done?C.green:p.color}`,background:t.done?C.green:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    {t.done && <Icon name="check" size={11} color="#001a10" stroke={3}/>}
+                  <div style={{
+                    width:19,height:19,borderRadius:6,
+                    border:`1.5px solid ${t.done?C.green:C.border2}`,
+                    background:t.done?C.green:"transparent",
+                    flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
+                    boxShadow: t.done?`0 0 0 3px ${C.green}22`:"none",transition:"all .2s"
+                  }}>
+                    {t.done && <Icon name="check" size={11} color="#002616" stroke={3}/>}
                   </div>
                   <span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:t.done?"line-through":"none",color:t.done?C.text3:C.text}}>{t.title}</span>
-                  {t.project && <Badge color={C.text3}>{t.project}</Badge>}
+                  {t.project && <span style={{fontSize:10,color:C.text3,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}><span style={{width:4,height:4,borderRadius:"50%",background:C.gold}}/>{t.project}</span>}
                 </button>
               );
             })}
@@ -729,29 +868,54 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         </Card>
       )}
 
-      {/* Habit categories */}
+      {/* Habit categories — premium collapsible sections */}
       {Object.entries(byCategory).map(([cat,hs])=>{
         const c = CATS[cat]||{color:C.text3,icon:"check"};
-        const done = hs.filter(h=>todayComp[h.id]).length;
+        const doneCount = hs.filter(h=>todayComp[h.id]).length;
         const isCollapsed = !!collapsed[cat];
+        const pct = hs.length ? Math.round((doneCount/hs.length)*100) : 0;
         return (
-          <Card key={cat} style={{padding:14}}>
-            <button onClick={()=>toggleCat(cat)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",color:C.text,fontFamily:FONT,marginBottom:isCollapsed?0:12}}>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <Icon name={c.icon} size={16} color={c.color}/>
-                <span style={{fontSize:12,fontWeight:700,color:c.color,letterSpacing:0.6}}>{cat.toUpperCase()}</span>
-                <span style={{fontSize:11,color:C.text4,marginLeft:2,fontWeight:500}}>{done}/{hs.length}</span>
+          <Card key={cat} style={{padding:16,overflow:"hidden"}}>
+            <button onClick={()=>toggleCat(cat)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%",background:"none",border:"none",padding:0,cursor:"pointer",color:C.text,fontFamily:FONT,marginBottom:isCollapsed?0:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0}}>
+                <div style={{width:30,height:30,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",background:c.color+"14",border:`1px solid ${c.color}26`,flexShrink:0}}>
+                  <Icon name={c.icon} size={15} color={c.color}/>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:2,minWidth:0}}>
+                  <span style={{fontSize:12,fontWeight:700,color:c.color,letterSpacing:0.7,textTransform:"uppercase"}}>{cat}</span>
+                  <span style={{fontSize:11,color:C.text3,fontWeight:500}}>{doneCount}/{hs.length} · {pct}%</span>
+                </div>
               </div>
-              <Icon name="chevD" size={14} color={C.text3} style={{transform:isCollapsed?"rotate(-90deg)":"none",transition:"transform .2s"}}/>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                {/* mini progress ring */}
+                <div style={{width:40,height:6,borderRadius:99,background:C.border,overflow:"hidden"}}>
+                  <div style={{width:`${pct}%`,height:"100%",background:c.color,transition:"width .5s cubic-bezier(.2,.8,.2,1)",boxShadow:`0 0 8px ${c.color}66`}}/>
+                </div>
+                <Icon name="chevD" size={14} color={C.text3} style={{transform:isCollapsed?"rotate(-90deg)":"none",transition:"transform .25s cubic-bezier(.2,.8,.2,1)"}}/>
+              </div>
             </button>
             {!isCollapsed && (
-              <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              <div style={{display:"flex",flexDirection:"column",gap:7,animation:"fadeIn .25s cubic-bezier(.2,.8,.2,1)"}}>
                 {hs.map(h=>{
                   const checked = !!todayComp[h.id];
                   return (
-                    <button key={h.id} onClick={()=>toggle(h.id, viewDay)} style={{display:"flex",alignItems:"center",gap:12,padding:"11px 12px",background:checked?c.color+"12":C.card2,border:`1px solid ${checked?c.color+"40":C.border}`,borderRadius:10,cursor:"pointer",color:C.text,transition:"all .15s",textAlign:"left",fontFamily:FONT}}>
-                      <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${checked?c.color:C.border2}`,background:checked?c.color:"transparent",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        {checked && <Icon name="check" size={12} color="#0a0a0a" stroke={3}/>}
+                    <button key={h.id} onClick={()=>toggle(h.id, viewDay)} style={{
+                      display:"flex",alignItems:"center",gap:12,padding:"12px 13px",
+                      background: checked?c.color+"14":C.card2,
+                      border:`1px solid ${checked?c.color+"40":C.border}`,
+                      borderRadius:12,cursor:"pointer",color:C.text,
+                      transition:"background .2s, border-color .2s, transform .12s",
+                      textAlign:"left",fontFamily:FONT,
+                      boxShadow: checked ? `0 0 0 3px ${c.color}10` : "none",
+                    }}>
+                      <div style={{
+                        width:20,height:20,borderRadius:6,
+                        border:`1.5px solid ${checked?c.color:C.border2}`,
+                        background:checked?c.color:"transparent",
+                        flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
+                        transition:"all .2s",
+                      }}>
+                        {checked && <Icon name="check" size={12} color="#001a10" stroke={3}/>}
                       </div>
                       <span style={{flex:1,fontSize:14,fontWeight:500,textDecoration:checked?"line-through":"none",color:checked?C.text3:C.text}}>{h.label}</span>
                       {h.nn && <Badge color={C.red}>NN</Badge>}
@@ -798,7 +962,8 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
   const [newProject, setNewProject] = useState("");
   const [filter, setFilter] = useState("all");
   const [showDone, setShowDone] = useState(false);
-  const [sortBy, setSortBy] = useState("project"); // project | date_asc | date_desc | priority
+  const [sortBy, setSortBy] = useState("project"); // project | date_asc | date_desc | due | priority
+  const [sortOpen, setSortOpen] = useState(false);
 
   const empty = {title:"",priority:"medium",project:"",scheduledFor:"",notes:""};
   const [d, setD] = useState(empty);
@@ -813,8 +978,10 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
     setForm(null); setEditTask(null); setD(empty);
   };
 
+  // Non-destructive: "Add to today" sets a separate `todayFor` field.
+  // The original `scheduledFor` (due date) is never modified.
   const assignToToday = (id) => {
-    setTasks(p => (p||[]).map(t => t.id===id ? {...t, scheduledFor: todayStr()} : t));
+    setTasks(p => (p||[]).map(t => t.id===id ? {...t, todayFor: todayStr()} : t));
   };
 
   const addProject = () => {
@@ -837,20 +1004,30 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
   if (filter !== "all") displayed = displayed.filter(t => t.project === filter);
 
   const FAR = "9999-12-31";
+  // Creation-order key: `id` is Date.now().toString() → deterministic timestamp.
+  // Falls back to createdAt (date-only on old tasks) if id isn't numeric.
+  const createdKey = (t) => {
+    const n = Number(t.id);
+    if (!Number.isNaN(n) && n > 0) return n;
+    return Date.parse(t.createdAt || "") || 0;
+  };
   displayed = [...displayed].sort((a,b)=>{
     if (sortBy === "priority") {
       const pa = PRIORITY[normPrio(a.priority||a.urgency)].order;
       const pb = PRIORITY[normPrio(b.priority||b.urgency)].order;
       if (pa !== pb) return pa - pb;
-      return (a.scheduledFor||FAR).localeCompare(b.scheduledFor||FAR);
+      return createdKey(b) - createdKey(a);
     }
-    if (sortBy === "date_asc")  return (a.scheduledFor||FAR).localeCompare(b.scheduledFor||FAR);
-    if (sortBy === "date_desc") return (b.scheduledFor||"").localeCompare(a.scheduledFor||"");
-    // project: priority then date inside each group (grouping done below)
+    // Date sorts = CREATION DATE ONLY
+    if (sortBy === "date_asc")  return createdKey(a) - createdKey(b); // oldest first
+    if (sortBy === "date_desc") return createdKey(b) - createdKey(a); // newest first
+    // Échéance = closest due date first, undated pushed to the end
+    if (sortBy === "due")       return (a.scheduledFor||FAR).localeCompare(b.scheduledFor||FAR);
+    // project: priority then creation order inside each group
     const pa = PRIORITY[normPrio(a.priority||a.urgency)].order;
     const pb = PRIORITY[normPrio(b.priority||b.urgency)].order;
     if (pa !== pb) return pa - pb;
-    return (a.scheduledFor||FAR).localeCompare(b.scheduledFor||FAR);
+    return createdKey(b) - createdKey(a);
   });
 
   const byProject = sortBy === "project" && filter === "all" && !showDone
@@ -858,11 +1035,13 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
     : null;
 
   const SORTS = [
-    {id:"project",   label:"Projet",    icon:"briefcase"},
-    {id:"date_asc",  label:"Date ↑",    icon:"calendar"},
-    {id:"date_desc", label:"Date ↓",    icon:"calendar"},
-    {id:"priority",  label:"Priorité",  icon:"alert"},
+    {id:"project",   label:"Projet",         icon:"briefcase"},
+    {id:"date_asc",  label:"Date ↑ (anciens)", icon:"calendar"},
+    {id:"date_desc", label:"Date ↓ (récents)", icon:"calendar"},
+    {id:"due",       label:"Échéance",       icon:"clock"},
+    {id:"priority",  label:"Priorité",       icon:"alert"},
   ];
+  const activeSort = SORTS.find(s => s.id === sortBy) || SORTS[0];
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
@@ -886,22 +1065,58 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
         <FilterChip active={showDone} onClick={()=>setShowDone(x=>!x)} color={C.green}>{showDone?"Terminées":"Actives"}</FilterChip>
       </div>
 
-      {/* Sort row — minimal, keyboard friendly */}
-      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-        <span style={{fontSize:10,color:C.text4,fontWeight:700,letterSpacing:0.6,display:"inline-flex",alignItems:"center",gap:5,paddingRight:4}}>
-          <Icon name="sortDesc" size={12}/> TRI
-        </span>
-        {SORTS.map(s => (
-          <button key={s.id} onClick={()=>setSortBy(s.id)} style={{
-            padding:"5px 10px",borderRadius:999,fontSize:11,fontWeight:600,cursor:"pointer",
-            background: sortBy===s.id ? C.gold+"18" : "transparent",
-            border:`1px solid ${sortBy===s.id ? C.gold+"60" : C.border}`,
-            color: sortBy===s.id ? C.gold : C.text3,
-            display:"inline-flex",alignItems:"center",gap:5,fontFamily:FONT,transition:"all .15s",
+      {/* Sort — collapsed into a single button with popover */}
+      <div style={{position:"relative",alignSelf:"flex-start"}}>
+        <button
+          onClick={()=>setSortOpen(o=>!o)}
+          aria-haspopup="listbox"
+          aria-expanded={sortOpen}
+          style={{
+            display:"inline-flex",alignItems:"center",gap:8,
+            padding:"7px 12px",borderRadius:999,
+            background: sortOpen ? C.card2 : "transparent",
+            border:`1px solid ${sortOpen?C.gold+"50":C.border2}`,
+            color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:FONT,
+            transition:"all .18s",
           }}>
-            {s.label}
-          </button>
-        ))}
+          <Icon name="sortDesc" size={13} color={C.text3}/>
+          <span style={{color:C.text4}}>Tri ·</span>
+          <span style={{color:C.gold}}>{activeSort.label}</span>
+          <Icon name="chevD" size={12} color={C.text3} style={{transform:sortOpen?"rotate(180deg)":"none",transition:"transform .18s"}}/>
+        </button>
+        {sortOpen && (
+          <>
+            <div onClick={()=>setSortOpen(false)} style={{position:"fixed",inset:0,zIndex:40}}/>
+            <div role="listbox" style={{
+              position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:41,minWidth:240,
+              background:"rgba(14,18,26,0.92)",border:`1px solid ${C.border2}`,borderRadius:16,padding:6,
+              boxShadow:"0 20px 50px -14px rgba(0,0,0,0.75), 0 0 0 1px rgba(34,211,160,0.04)",
+              backdropFilter:"blur(16px)",WebkitBackdropFilter:"blur(16px)",
+              animation:"popIn .18s cubic-bezier(.2,.8,.2,1)",
+              fontFamily:FONT,
+            }}>
+              {SORTS.map(s => {
+                const on = sortBy === s.id;
+                return (
+                  <button key={s.id} onClick={()=>{setSortBy(s.id);setSortOpen(false);}} style={{
+                    display:"flex",alignItems:"center",gap:10,width:"100%",
+                    padding:"9px 10px",borderRadius:10,border:"none",
+                    background: on ? C.gold+"14" : "transparent",
+                    color: on ? C.gold : C.text2,
+                    fontSize:13,fontWeight:on?600:500,cursor:"pointer",fontFamily:FONT,
+                    textAlign:"left",transition:"background .12s",
+                  }}
+                  onMouseEnter={e=>{ if(!on) e.currentTarget.style.background=C.card2; }}
+                  onMouseLeave={e=>{ if(!on) e.currentTarget.style.background="transparent"; }}>
+                    <Icon name={s.icon} size={14}/>
+                    <span style={{flex:1}}>{s.label}</span>
+                    {on && <Icon name="check" size={13}/>}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       {displayed.length === 0 && (
@@ -970,8 +1185,9 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
   const prio = normPrio(task.priority||task.urgency);
   const p = PRIORITY[prio];
   const due = task.scheduledFor;
-  const isToday = due === todayStr();
-  const isOverdue = due && due < todayStr() && !task.done;
+  const today = todayStr();
+  const isInToday = task.todayFor === today || due === today;
+  const isOverdue = due && due < today && !task.done;
   const isHigh = prio === "high";
   return (
     <Card style={{
@@ -1008,8 +1224,13 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
               </span>
             )}
             {due && (
-              <span style={{color:isOverdue?C.red:isToday?C.green:C.text3,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+              <span style={{color:isOverdue?C.red:due===today?C.green:C.text3,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
                 <Icon name="calendar" size={10}/> {fmtShort(due)}
+              </span>
+            )}
+            {task.todayFor === today && due !== today && (
+              <span style={{color:C.green,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+                <Icon name="sun" size={10}/> Aujourd'hui
               </span>
             )}
             {prio === "low" && (
@@ -1019,7 +1240,7 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
           {task.notes && <div style={{fontSize:12,color:C.text3,marginTop:6,lineHeight:1.5}}>{task.notes}</div>}
         </div>
         <div style={{display:"flex",gap:1,flexShrink:0}}>
-          {!isToday && !task.done && (
+          {!isInToday && !task.done && (
             <IconBtn name="calendarPlus" onClick={onAssignToday} title="Ajouter à aujourd'hui" color={C.gold}/>
           )}
           <IconBtn name="edit" onClick={onEdit} title="Modifier"/>
@@ -1839,7 +2060,7 @@ Sois précis, basé sur les vraies données.`;
         ))}
         {loading && (
           <div style={{display:"flex"}}>
-            <div style={{padding:"12px 16px",background:C.card,border:`1px solid ${C.border}`,borderRadius:"14px 14px 14px 4px",display:"flex",gap:5,alignItems:"center"}}>
+            <div style={{padding:"12px 16px",background:C.cardS,border:`1px solid ${C.border}`,borderRadius:"14px 14px 14px 4px",display:"flex",gap:5,alignItems:"center"}}>
               {[0,1,2].map(i=><span key={i} style={{width:6,height:6,borderRadius:"50%",background:C.gold,display:"inline-block",animation:`b .8s ${i*.15}s infinite`}}/>)}
             </div>
           </div>
@@ -1855,7 +2076,7 @@ Sois précis, basé sur les vraies données.`;
         <div ref={bottom}/>
       </div>
 
-      <div style={{display:"flex",gap:8,paddingTop:10,borderTop:`1px solid ${C.border}`,background:C.card,alignItems:"center"}}>
+      <div style={{display:"flex",gap:8,paddingTop:10,borderTop:`1px solid ${C.border}`,background:"transparent",alignItems:"center"}}>
         <input
           value={input}
           onChange={e=>setInput(e.target.value)}
@@ -1915,28 +2136,26 @@ function FloatingAgent(shared) {
 
   return (
     <>
-      {/* Floating action button */}
-      <button
-        onClick={()=>setOpen(o=>!o)}
-        aria-label={open ? "Fermer l'assistant" : "Ouvrir l'assistant"}
-        className="growth-fab"
-        style={{
-          position:"fixed", zIndex:420,
-          width:56, height:56, borderRadius:"50%",
-          background: open
-            ? C.card
-            : `linear-gradient(135deg, ${C.gold}, ${C.goldD})`,
-          border: open ? `1px solid ${C.border2}` : "none",
-          cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
-          boxShadow: open
-            ? "0 10px 30px -12px rgba(0,0,0,0.6)"
-            : "0 10px 30px -8px rgba(245,192,86,0.45), 0 0 0 4px rgba(245,192,86,0.08)",
-          transition:"transform .18s, background .2s, box-shadow .2s",
-          transform: open ? "rotate(90deg)" : "none",
-          fontFamily: FONT,
-        }}>
-        <Icon name={open ? "x" : "sparkles"} size={22} color={open ? C.text : "#0a0a0a"}/>
-      </button>
+      {/* Floating action button — hidden while chat is open to avoid
+          overlapping the send button. Use the top-right X inside the drawer to close. */}
+      {!open && (
+        <button
+          onClick={()=>setOpen(true)}
+          aria-label="Ouvrir l'assistant"
+          className="growth-fab"
+          style={{
+            position:"fixed", zIndex:420,
+            width:56, height:56, borderRadius:"50%",
+            background:`linear-gradient(135deg, ${C.gold}, ${C.goldD})`,
+            border:"none",
+            cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+            boxShadow:"0 14px 36px -10px rgba(245,192,86,0.5), 0 0 0 4px rgba(245,192,86,0.08)",
+            transition:"transform .2s cubic-bezier(.2,.8,.2,1), box-shadow .2s",
+            fontFamily: FONT,
+          }}>
+          <Icon name="sparkles" size={22} color="#0a0a0a"/>
+        </button>
+      )}
 
       {/* Backdrop + panel */}
       {open && (
@@ -2013,9 +2232,13 @@ function MeHub({setSection, habits, goals, profile, workSess}) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",gap:10}}>
         {cards.map(c=>(
           <button key={c.id} onClick={()=>setSection(c.id)} style={{
-            background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:18,cursor:"pointer",
-            textAlign:"left",fontFamily:FONT,color:C.text,transition:"all .15s",
-          }} onMouseEnter={e=>e.currentTarget.style.borderColor=c.color+"50"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+            background:C.card,border:`1px solid ${C.border}`,borderRadius:18,padding:18,cursor:"pointer",
+            textAlign:"left",fontFamily:FONT,color:C.text,
+            backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",
+            boxShadow:"0 10px 30px -18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03)",
+            transition:"transform .18s cubic-bezier(.2,.8,.2,1), border-color .2s, box-shadow .25s",
+          }} onMouseEnter={e=>{e.currentTarget.style.borderColor=c.color+"50";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow=`0 18px 40px -18px ${c.color}44, inset 0 1px 0 rgba(255,255,255,0.04)`;}}
+             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 10px 30px -18px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03)";}}>
             <div style={{marginBottom:12}}><Icon name={c.icon} size={22} color={c.color}/></div>
             <div style={{fontSize:15,fontWeight:700,color:c.color,marginBottom:3,letterSpacing:-0.3}}>{c.title}</div>
             <div style={{fontSize:12,color:C.text3,fontWeight:500}}>{c.sub}</div>
