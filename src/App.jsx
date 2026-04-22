@@ -381,6 +381,24 @@ export default function App() {
     return {rate, done, total:applicable, firstSeen:first};
   }, [completions]);
 
+  // Rate for an explicit date-range (any month or custom span).
+  // Only counts days where the habit existed (>= firstSeen).
+  const habitRateRange = useCallback((habit, dayKeys) => {
+    const id = habit.id;
+    const firstDates = Object.keys(completions).filter(dk => completions[dk]?.[id]).sort();
+    const firstSeen = firstDates[0] || null;
+    if (!firstSeen || !dayKeys.length) return {rate:0,done:0,total:0,firstSeen};
+    let applicable = 0, done = 0;
+    for (const dk of dayKeys) {
+      if (dk < firstSeen) continue;
+      if (!isApplicable(habit, dk)) continue;
+      applicable++;
+      if (completions[dk]?.[id]) done++;
+    }
+    const rate = applicable ? Math.round((done / applicable) * 100) : 0;
+    return {rate, done, total:applicable, firstSeen};
+  }, [completions]);
+
   const toggle = useCallback((id, dk) => {
     const k = dk || activeDayKey;
     setComp(prev => ({...prev, [k]: {...(prev[k]||{}), [id]: !(prev[k]||{})[id]}}));
@@ -398,7 +416,7 @@ export default function App() {
   const todayScore = score(activeDayKey);
 
   const shared = {
-    habits:nHabits, setHabits, completions, setComp, toggle, score, habitRate,
+    habits:nHabits, setHabits, completions, setComp, toggle, score, habitRate, habitRateRange,
     tasks, setTasks, projects, setProjects, body, setBody,
     workSess, setWorkSess, journal, setJournal, profile, setProfile,
     sportLog, setSportLog, goals, setGoals,
@@ -485,6 +503,14 @@ export default function App() {
           .growth-bottom{display:none}
           .growth-main{padding:28px 32px}
         }
+
+        /* Sleep grid: stacks cleanly on narrow screens */
+        .sleep-grid{display:grid;gap:10px;grid-template-columns:1fr 1fr 1fr}
+        @media (max-width: 560px){
+          .sleep-grid{grid-template-columns:1fr 1fr}
+          .sleep-duration{grid-column:1 / -1}
+        }
+
         @keyframes b{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
       `}</style>
@@ -584,24 +610,24 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.8,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
           <Icon name="moon" size={12}/> SOMMEIL
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-          <div>
+        <div className="sleep-grid">
+          <div className="sleep-cell">
             <div style={{fontSize:10,color:C.text4,fontWeight:500,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>
               <Icon name="bed" size={11}/> Coucher
             </div>
             <input type="time" value={dayBody.bedTime||""} onChange={e=>handleSetBed(e.target.value)}
-              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,padding:"8px 10px",fontSize:13,outline:"none",fontFamily:FONT,width:"100%"}}/>
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,padding:"10px 12px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%"}}/>
           </div>
-          <div>
+          <div className="sleep-cell">
             <div style={{fontSize:10,color:C.text4,fontWeight:500,marginBottom:5,display:"flex",alignItems:"center",gap:4}}>
               <Icon name="sunrise" size={11}/> Réveil
             </div>
             <input type="time" value={dayBody.wakeTime||""} onChange={e=>handleSetWake(e.target.value)}
-              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,padding:"8px 10px",fontSize:13,outline:"none",fontFamily:FONT,width:"100%"}}/>
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,padding:"10px 12px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%"}}/>
           </div>
-          <div style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,padding:"6px 10px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+          <div className="sleep-cell sleep-duration" style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,padding:"8px 12px",display:"flex",flexDirection:"column",justifyContent:"center"}}>
             <div style={{fontSize:10,color:C.text4,fontWeight:500}}>Durée</div>
-            <div style={{fontSize:18,fontWeight:700,color:dayBody.sleep?C.green:C.text4,letterSpacing:-0.5}}>
+            <div style={{fontSize:20,fontWeight:700,color:dayBody.sleep?C.green:C.text4,letterSpacing:-0.5,lineHeight:1.1}}>
               {dayBody.sleep ? `${dayBody.sleep}h` : "—"}
             </div>
           </div>
@@ -905,91 +931,268 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ANALYTICS
 // ═══════════════════════════════════════════════════════════════════════════════
-function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
-  const [period, setPeriod] = useState("30d");
+
+// Pure helper: aggregates day-level metrics for a given range (array of date keys).
+function computePeriodStats(days, score, body, workSess) {
+  const scores = days.map(d => ({d, ...score(d)}));
+  const withData = scores.filter(s => s.total > 0);
+  const avg = withData.length ? Math.round(withData.reduce((a,b)=>a+b.pct,0) / withData.length) : 0;
+  const perfectDays = withData.filter(s => s.pct >= 90).length;
+  const best = withData.reduce((b,s) => s.pct > (b?.pct || 0) ? s : b, null);
+
+  const bodyDays = days.filter(d => body[d]);
+  const sleepDays = bodyDays.filter(d => body[d].sleep);
+  const avgSleep = sleepDays.length
+    ? (sleepDays.reduce((a,d) => a + body[d].sleep, 0) / sleepDays.length).toFixed(1)
+    : "—";
+  const energyDays = bodyDays.filter(d => body[d].energy != null);
+  const avgEnergy = energyDays.length
+    ? (energyDays.reduce((a,d) => a + body[d].energy, 0) / energyDays.length).toFixed(1)
+    : "—";
+
+  const workMin = days.reduce((a,d) =>
+    a + (workSess||[]).filter(s => s.date === d).reduce((x,y) => x + (y.duration || 0), 0)
+  , 0);
+
+  return {scores, avg, perfectDays, best, avgSleep, avgEnergy, workMin, nDays: days.length};
+}
+
+// Full days of a month, optionally clipped so we don't include future days.
+function monthDaysUpTo(year, month, upToKey) {
+  return monthRange(year, month).filter(dk => dk <= upToKey);
+}
+
+function AnalyseTab({habits, completions, body, workSess, score, habitRateRange}) {
+  const [monthOffset, setMonthOffset] = useState(0); // 0 = current month
+  const [compare, setCompare] = useState(false);
   const [filter, setFilter] = useState("all");
-  const [monthOffset, setMonthOffset] = useState(0);
 
-  const nDays = period==="7d"?7:period==="30d"?30:90;
-  const days = lastN(nDays);
-  const scores = days.map(d=>({d,...score(d)}));
-  const avg = scores.length ? Math.round(scores.reduce((a,b)=>a+b.pct,0)/scores.length) : 0;
-
-  const prevDays = Array.from({length:nDays},(_,i)=>addDays(todayStr(),-(nDays*2-1-i)));
-  const prevAvg = Math.round(prevDays.map(d=>score(d).pct).reduce((a,b)=>a+b,0)/nDays);
-  const diff = avg - prevAvg;
-
-  const habitRates = useMemo(()=> habits.map(h => ({...h, ...habitRate(h, 30)})).sort((a,b)=>b.rate-a.rate), [habits, habitRate]);
-  const filtered = filter==="all" ? habitRates : habitRates.filter(h=>h.cat===filter);
-
-  const catAvg = Object.keys(CATS).map(cat => {
-    const hs = habitRates.filter(h=>h.cat===cat && h.firstSeen);
-    return {cat, avg:hs.length?Math.round(hs.reduce((a,b)=>a+b.rate,0)/hs.length):0, color:CATS[cat].color, icon:CATS[cat].icon};
-  }).filter(c=>c.avg>0).sort((a,b)=>b.avg-a.avg);
-
-  const bodyDays = days.filter(d=>body[d]);
-  const avgEnergy = bodyDays.length ? (bodyDays.reduce((a,d)=>a+(body[d].energy||5),0)/bodyDays.length).toFixed(1) : "—";
-  const avgSleep  = bodyDays.length ? (bodyDays.filter(d=>body[d].sleep).reduce((a,d,_,arr)=>a+body[d].sleep/arr.length,0)).toFixed(1) : "—";
-  const workMin   = days.reduce((a,d)=>a+workSess.filter(s=>s.date===d).reduce((x,y)=>x+(y.duration||0),0),0);
-  const perfectDays = scores.filter(s=>s.pct>=90).length;
-  const best = scores.reduce((b,s)=>s.pct>(b?.pct||0)?s:b,null);
-
+  const todayKey = todayStr();
   const now = new Date();
-  const targetMonth = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
-  const y = targetMonth.getFullYear(), m = targetMonth.getMonth();
-  const monthDays = monthRange(y, m);
-  const firstDow = new Date(y, m, 1).getDay();
-  const monthName = targetMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const curMonth  = useMemo(()=> new Date(now.getFullYear(), now.getMonth() + monthOffset, 1), [monthOffset]);
+  const prevMonth = useMemo(()=> new Date(now.getFullYear(), now.getMonth() + monthOffset - 1, 1), [monthOffset]);
+  const isCurrentMonth = monthOffset === 0;
+  const canGoForward = monthOffset < 0;
+
+  const curY = curMonth.getFullYear(), curM = curMonth.getMonth();
+  const prevY = prevMonth.getFullYear(), prevM = prevMonth.getMonth();
+
+  // Full grid + past-or-today slice for aggregates
+  const fullMonthDays = useMemo(()=> monthRange(curY, curM), [curY, curM]);
+  const periodDays    = useMemo(()=> fullMonthDays.filter(d => d <= todayKey), [fullMonthDays, todayKey]);
+  // Previous month: clip to same "day-of-month" count as current period for fair comparison
+  const prevPeriodDays = useMemo(()=>{
+    const full = monthRange(prevY, prevM);
+    return isCurrentMonth ? full.slice(0, periodDays.length) : full;
+  }, [prevY, prevM, isCurrentMonth, periodDays.length]);
+
+  const monthName = curMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const prevMonthName = prevMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
+  const firstDow = new Date(curY, curM, 1).getDay();
+
+  // ─── Period aggregates (all sections derive from these) ─────────
+  const stats     = useMemo(()=> computePeriodStats(periodDays, score, body, workSess), [periodDays, score, body, workSess]);
+  const prevStats = useMemo(()=> computePeriodStats(prevPeriodDays, score, body, workSess), [prevPeriodDays, score, body, workSess]);
+  const diff = stats.avg - prevStats.avg;
+
+  // ─── Habit rates for this period ────────────────────────────────
+  const habitRates = useMemo(()=>
+    habits.map(h => ({...h, ...habitRateRange(h, periodDays)}))
+          .sort((a,b) => (b.firstSeen?b.rate:-1) - (a.firstSeen?a.rate:-1))
+  , [habits, habitRateRange, periodDays]);
+
+  const prevHabitRates = useMemo(()=>
+    habits.map(h => ({...h, ...habitRateRange(h, prevPeriodDays)}))
+  , [habits, habitRateRange, prevPeriodDays]);
+
+  const filtered = filter === "all" ? habitRates : habitRates.filter(h => h.cat === filter);
+
+  // Habit-level change vs previous period (for compare view)
+  const habitDeltas = useMemo(()=>{
+    const prevById = new Map(prevHabitRates.map(h => [h.id, h]));
+    return habitRates
+      .filter(h => h.firstSeen)
+      .map(h => {
+        const p = prevById.get(h.id);
+        const prevRate = p?.firstSeen ? p.rate : null;
+        const delta = prevRate != null ? h.rate - prevRate : null;
+        return {...h, prevRate, delta};
+      });
+  }, [habitRates, prevHabitRates]);
+
+  // ─── Category averages for this period ──────────────────────────
+  const catAvg = useMemo(()=> Object.keys(CATS).map(cat => {
+    const hs = habitRates.filter(h => h.cat === cat && h.firstSeen);
+    return {
+      cat,
+      avg: hs.length ? Math.round(hs.reduce((a,b)=>a+b.rate, 0) / hs.length) : 0,
+      color: CATS[cat].color,
+      icon: CATS[cat].icon,
+      count: hs.length,
+    };
+  }).filter(c => c.count > 0).sort((a,b)=>b.avg-a.avg), [habitRates]);
+
+  const prevCatAvg = useMemo(()=>{
+    const map = {};
+    Object.keys(CATS).forEach(cat => {
+      const hs = prevHabitRates.filter(h => h.cat === cat && h.firstSeen);
+      map[cat] = hs.length ? Math.round(hs.reduce((a,b)=>a+b.rate, 0) / hs.length) : 0;
+    });
+    return map;
+  }, [prevHabitRates]);
+
+  // ─── Improvement list: bottom 5, NN-weighted (NN habits surface ~20pts earlier) ──
+  const improvementList = useMemo(()=>
+    habitRates
+      .filter(h => h.firstSeen && h.total >= 3 && h.rate < 80)
+      .map(h => ({...h, adjusted: h.rate - (h.nn ? 20 : 0)}))
+      .sort((a,b) => a.adjusted - b.adjusted)
+      .slice(0, 5)
+  , [habitRates]);
+
+  const periodLabel = isCurrentMonth ? "Ce mois (en cours)" : "Mois complet";
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{fontWeight:700,fontSize:22,letterSpacing:-0.5}}>Analytics</div>
-        <div style={{display:"flex",gap:6}}>
-          {[["7d","7j"],["30d","30j"],["90d","90j"]].map(([p,l])=>(
-            <button key={p} onClick={()=>setPeriod(p)} style={{padding:"5px 12px",borderRadius:20,border:"none",background:period===p?C.gold:C.card,color:period===p?"#0a0a0a":C.text3,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:FONT}}>{l}</button>
-          ))}
+      {/* Header + month nav + compare toggle */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontWeight:700,fontSize:22,letterSpacing:-0.5}}>Analytics</div>
+          <div style={{fontSize:12,color:C.text3,marginTop:4,textTransform:"capitalize"}}>
+            {monthName} · {periodLabel} · {periodDays.length}j
+          </div>
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          <button onClick={()=>setMonthOffset(o=>o-1)} title="Mois précédent" style={{...navArrow,width:32,height:32}}><Icon name="chevL" size={15}/></button>
+          <button onClick={()=>setMonthOffset(0)} disabled={monthOffset===0} style={{...navArrow,width:"auto",height:32,padding:"0 12px",fontSize:12,fontWeight:600,opacity:monthOffset===0?0.4:1}}>Actuel</button>
+          <button onClick={()=>setMonthOffset(o=>Math.min(0,o+1))} disabled={!canGoForward} title="Mois suivant" style={{...navArrow,width:32,height:32,opacity:canGoForward?1:0.4}}><Icon name="chevR" size={15}/></button>
+          <button onClick={()=>setCompare(c=>!c)} style={{
+            padding:"0 14px",height:32,borderRadius:20,
+            border:`1px solid ${compare?C.gold:C.border2}`,
+            background: compare ? C.gold+"18" : "transparent",
+            color: compare ? C.gold : C.text3,
+            fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:FONT,
+            display:"inline-flex",alignItems:"center",gap:6
+          }}>
+            <Icon name={compare?"trendUp":"bar"} size={12}/> Comparer
+          </button>
         </div>
       </div>
 
+      {/* Hero: avg score + highlights + sparkline */}
       <Card glow style={{background:`linear-gradient(135deg, ${C.card}, ${C.card2})`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14,gap:14,flexWrap:"wrap"}}>
           <div>
             <div style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.8,marginBottom:4}}>SCORE MOYEN</div>
-            <div style={{fontSize:54,fontWeight:800,color:avg>=80?C.green:avg>=60?C.gold:C.red,lineHeight:1,letterSpacing:-2}}>{avg}%</div>
+            <div style={{fontSize:54,fontWeight:800,color:stats.avg>=80?C.green:stats.avg>=60?C.gold:C.red,lineHeight:1,letterSpacing:-2}}>{stats.avg}%</div>
             <div style={{fontSize:12,color:diff>=0?C.green:C.red,fontWeight:600,marginTop:6,display:"inline-flex",alignItems:"center",gap:4}}>
-              <Icon name={diff>=0?"trendUp":"trendDown"} size={12}/> {Math.abs(diff)}% vs période précédente
+              <Icon name={diff>=0?"trendUp":"trendDown"} size={12}/> {Math.abs(diff)}% vs {prevMonthName}
             </div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:22,fontWeight:800,color:C.gold,letterSpacing:-0.5}}>{perfectDays}</div>
+            <div style={{fontSize:22,fontWeight:800,color:C.gold,letterSpacing:-0.5}}>{stats.perfectDays}</div>
             <div style={{fontSize:10,color:C.text4,fontWeight:500}}>jours parfaits</div>
-            <div style={{fontSize:22,fontWeight:800,color:C.green,marginTop:8,letterSpacing:-0.5}}>{best?.pct||0}%</div>
+            <div style={{fontSize:22,fontWeight:800,color:C.green,marginTop:8,letterSpacing:-0.5}}>{stats.best?.pct||0}%</div>
             <div style={{fontSize:10,color:C.text4,fontWeight:500}}>meilleur jour</div>
           </div>
         </div>
-        <Sparkline data={scores.map(s=>s.pct)} color={avg>=70?C.green:C.gold} h={60}/>
+        <Sparkline data={stats.scores.map(s=>s.pct)} color={stats.avg>=70?C.green:C.gold} h={60}/>
       </Card>
 
-      {/* Heatmap */}
+      {/* Compare block */}
+      {compare && (
+        <Card style={{border:`1px solid ${C.gold}30`,background:`linear-gradient(135deg, ${C.gold}08, transparent)`}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.gold,letterSpacing:0.8,marginBottom:14,display:"inline-flex",alignItems:"center",gap:6,textTransform:"uppercase"}}>
+            <Icon name="bar" size={12}/> Comparaison · <span style={{color:C.text2,textTransform:"capitalize"}}>{monthName}</span> vs <span style={{color:C.text3,textTransform:"capitalize"}}>{prevMonthName}</span>
+          </div>
+
+          {/* Headline metrics deltas */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(130px, 1fr))",gap:8,marginBottom:16}}>
+            <CompareMetric label="Score"         cur={stats.avg}          prev={prevStats.avg}          suffix="%"/>
+            <CompareMetric label="Jours parfaits" cur={stats.perfectDays}  prev={prevStats.perfectDays}  suffix=""/>
+            <CompareMetric label="Focus"          cur={Math.round(stats.workMin/60*10)/10}  prev={Math.round(prevStats.workMin/60*10)/10} suffix="h"/>
+            <CompareMetric label="Sommeil"        cur={stats.avgSleep}     prev={prevStats.avgSleep}     suffix="h"/>
+          </div>
+
+          {/* Per-category deltas */}
+          {catAvg.length>0 && (
+            <>
+              <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.6,marginBottom:8}}>PAR CATÉGORIE</div>
+              {catAvg.map(c => {
+                const prev = prevCatAvg[c.cat] || 0;
+                const d = c.avg - prev;
+                return (
+                  <div key={c.cat} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${C.border}`}}>
+                    <Icon name={c.icon} size={13} color={c.color}/>
+                    <span style={{flex:1,fontSize:13,fontWeight:500}}>{c.cat}</span>
+                    <span style={{fontSize:11,color:C.text4,fontWeight:500,minWidth:44,textAlign:"right"}}>{prev}%</span>
+                    <Icon name="chevR" size={11} color={C.text4}/>
+                    <span style={{fontSize:13,fontWeight:700,color:c.color,minWidth:44,textAlign:"right"}}>{c.avg}%</span>
+                    <span style={{fontSize:11,fontWeight:700,color:d>=0?C.green:C.red,minWidth:44,textAlign:"right",display:"inline-flex",alignItems:"center",justifyContent:"flex-end",gap:2}}>
+                      <Icon name={d>=0?"trendUp":"trendDown"} size={10}/>{d>0?"+":""}{d}
+                    </span>
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {/* Habit-level improved / declined / stable */}
+          {habitDeltas.length > 0 && (() => {
+            const improved = habitDeltas.filter(h => h.delta > 3).sort((a,b)=>b.delta-a.delta).slice(0,5);
+            const declined = habitDeltas.filter(h => h.delta < -3).sort((a,b)=>a.delta-b.delta).slice(0,5);
+            const stable   = habitDeltas.filter(h => h.delta != null && Math.abs(h.delta) <= 3).length;
+            return (
+              <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:C.green,letterSpacing:0.6,marginBottom:8,display:"inline-flex",alignItems:"center",gap:4}}>
+                    <Icon name="trendUp" size={11}/> EN PROGRÈS · {improved.length}
+                  </div>
+                  {improved.length === 0 ? (
+                    <div style={{fontSize:11,color:C.text4}}>—</div>
+                  ) : improved.map(h => (
+                    <div key={h.id} style={{fontSize:12,padding:"4px 0",display:"flex",justifyContent:"space-between",gap:6}}>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.label}</span>
+                      <span style={{color:C.green,fontWeight:700,flexShrink:0}}>+{h.delta}%</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{fontSize:10,fontWeight:700,color:C.red,letterSpacing:0.6,marginBottom:8,display:"inline-flex",alignItems:"center",gap:4}}>
+                    <Icon name="trendDown" size={11}/> EN BAISSE · {declined.length}
+                  </div>
+                  {declined.length === 0 ? (
+                    <div style={{fontSize:11,color:C.text4}}>—</div>
+                  ) : declined.map(h => (
+                    <div key={h.id} style={{fontSize:12,padding:"4px 0",display:"flex",justifyContent:"space-between",gap:6}}>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.label}</span>
+                      <span style={{color:C.red,fontWeight:700,flexShrink:0}}>{h.delta}%</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{gridColumn:"1 / -1",fontSize:11,color:C.text4,fontWeight:500,marginTop:4}}>
+                  · {stable} habitude{stable>1?"s":""} stable{stable>1?"s":""} (±3%)
+                </div>
+              </div>
+            );
+          })()}
+        </Card>
+      )}
+
+      {/* Heatmap (in sync with selected month) */}
       <Card>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,flexWrap:"wrap",gap:8}}>
           <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,display:"inline-flex",alignItems:"center",gap:6}}>
             <Icon name="calendar" size={12}/> HEATMAP · <span style={{textTransform:"capitalize",color:C.text2,fontWeight:700}}>{monthName}</span>
-          </div>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>setMonthOffset(o=>o-1)} style={{...navArrow,width:28,height:28}}><Icon name="chevL" size={14}/></button>
-            <button onClick={()=>setMonthOffset(0)} disabled={monthOffset===0} style={{...navArrow,width:"auto",height:28,padding:"0 10px",fontSize:11,fontWeight:600,opacity:monthOffset===0?0.4:1}}>Actuel</button>
-            <button onClick={()=>setMonthOffset(o=>Math.min(0,o+1))} disabled={monthOffset>=0} style={{...navArrow,width:28,height:28,opacity:monthOffset>=0?0.4:1}}><Icon name="chevR" size={14}/></button>
           </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)",gap:4,marginBottom:8}}>
           {DAY_NAMES.map((d,i)=><div key={i} style={{fontSize:9,color:C.text4,textAlign:"center",fontWeight:600,padding:"3px 0"}}>{d}</div>)}
           {Array.from({length:firstDow}).map((_,i)=><div key={"e"+i}/>)}
-          {monthDays.map(dk=>{
+          {fullMonthDays.map(dk=>{
             const s = score(dk);
-            const today = dk === todayStr();
-            const future = dk > todayStr();
+            const today = dk === todayKey;
+            const future = dk > todayKey;
             const hasData = (completions[dk] && Object.values(completions[dk]).some(v=>v)) || body[dk];
             const bg = future ? C.bg2 : heatColor(s.pct, hasData);
             return (
@@ -1000,7 +1203,7 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
                 color: future ? C.text4 : heatTextColor(s.pct),
                 border: today ? `2px solid ${C.gold}` : "none",
                 opacity: future?0.4:1
-              }}>{future?"":(s.pct>0?new Date(dk+"T12:00").getDate():"")}</div>
+              }}>{future?"":(hasData?new Date(dk+"T12:00").getDate():"")}</div>
             );
           })}
         </div>
@@ -1009,17 +1212,17 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
           {[0, 25, 45, 65, 80, 95].map(v => <div key={v} style={{width:14,height:14,borderRadius:3,background:heatColor(v, v>0)}}/>)}
           <span style={{fontWeight:600}}>Élevé</span>
           <div style={{flex:1}}/>
-          <div style={{display:"inline-flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,border:`2px solid ${C.gold}`}}/> Aujourd'hui</div>
+          {isCurrentMonth && <div style={{display:"inline-flex",alignItems:"center",gap:4}}><div style={{width:10,height:10,borderRadius:3,border:`2px solid ${C.gold}`}}/> Aujourd'hui</div>}
         </div>
       </Card>
 
-      {/* KPI */}
+      {/* KPI row (synced) */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))",gap:8}}>
         {[
-          {l:"Focus",v:fmtMin(workMin)||"0m",c:C.gold,icon:"clock"},
-          {l:"Énergie",v:`${avgEnergy}/10`,c:C.gold,icon:"activity"},
-          {l:"Sommeil",v:`${avgSleep}h`,c:C.green,icon:"moon"},
-          {l:"Jours ≥90%",v:perfectDays,c:C.green,icon:"target"},
+          {l:"Focus",      v:fmtMin(stats.workMin)||"0m",   c:C.gold,  icon:"clock"},
+          {l:"Énergie",    v:`${stats.avgEnergy}/10`,       c:C.gold,  icon:"activity"},
+          {l:"Sommeil",    v:`${stats.avgSleep}h`,          c:C.green, icon:"moon"},
+          {l:"Jours ≥90%", v:stats.perfectDays,             c:C.green, icon:"target"},
         ].map(m=>(
           <Card key={m.l} style={{padding:14,textAlign:"center"}}>
             <Icon name={m.icon} size={14} color={m.c} style={{marginBottom:6}}/>
@@ -1029,9 +1232,12 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
         ))}
       </div>
 
+      {/* Category breakdown (synced) */}
       {catAvg.length > 0 && (
         <Card>
-          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:12}}>PAR CATÉGORIE · 30J GLISSANTS</div>
+          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:12,textTransform:"uppercase"}}>
+            Par catégorie · {monthName}
+          </div>
           {catAvg.map(c=>(
             <div key={c.cat} style={{marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5,alignItems:"center"}}>
@@ -1044,10 +1250,13 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
         </Card>
       )}
 
+      {/* Habit rates (synced) */}
       <Card>
-        <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:8}}>HABITUDES · 30 JOURS GLISSANTS</div>
+        <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:8,textTransform:"uppercase"}}>
+          Habitudes · {monthName}
+        </div>
         <div style={{fontSize:11,color:C.text4,marginBottom:12,lineHeight:1.5}}>
-          Calcul depuis la première complétion, sur les 30 derniers jours applicables.
+          Taux de complétion sur {periodDays.length} jour{periodDays.length>1?"s":""}, uniquement depuis la première complétion de chaque habitude.
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
           <FilterChip active={filter==="all"} onClick={()=>setFilter("all")}>Toutes</FilterChip>
@@ -1071,20 +1280,28 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
             </div>
             <PBar value={h.firstSeen?h.rate:0} color={h.rate>=80?C.green:h.rate>=50?C.gold:C.red} h={4}/>
             {h.firstSeen && (
-              <div style={{fontSize:10,color:C.text4,marginTop:3,fontWeight:500}}>{h.done}/{h.total} depuis {fmtShort(h.firstSeen)}</div>
+              <div style={{fontSize:10,color:C.text4,marginTop:3,fontWeight:500}}>{h.done}/{h.total} sur {periodDays.length}j · depuis {fmtShort(h.firstSeen)}</div>
             )}
           </div>
         ))}
       </Card>
 
-      {habitRates.filter(h=>h.firstSeen && h.rate<60).length>0&&(
+      {/* Improvement list: NN-weighted bottom 5 (synced) */}
+      {improvementList.length > 0 && (
         <Card style={{border:`1px solid ${C.red}30`}}>
-          <div style={{fontSize:11,fontWeight:600,color:C.red,letterSpacing:0.6,marginBottom:10,display:"inline-flex",alignItems:"center",gap:6}}>
-            <Icon name="alert" size={12}/> À AMÉLIORER
+          <div style={{fontSize:11,fontWeight:600,color:C.red,letterSpacing:0.6,marginBottom:4,display:"inline-flex",alignItems:"center",gap:6,textTransform:"uppercase"}}>
+            <Icon name="alert" size={12}/> À améliorer · {monthName}
           </div>
-          {habitRates.filter(h=>h.firstSeen && h.rate<60).slice(0,5).map(h=>(
-            <div key={h.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div style={{fontSize:13,fontWeight:500}}>{h.label} <span style={{color:C.text3,fontSize:11}}>· {h.cat}</span></div>
+          <div style={{fontSize:10,color:C.text4,marginBottom:10,fontWeight:500}}>
+            Classement pondéré : les non-négociables remontent de +20 points dans la priorité.
+          </div>
+          {improvementList.map(h=>(
+            <div key={h.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`,gap:8}}>
+              <div style={{display:"flex",gap:6,alignItems:"center",flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.label}</div>
+                {h.nn && <Badge color={C.red}>NN</Badge>}
+                <span style={{color:C.text4,fontSize:11}}>· {h.cat}</span>
+              </div>
               <Badge color={C.red}>{h.rate}%</Badge>
             </div>
           ))}
@@ -1093,6 +1310,29 @@ function AnalyseTab({habits,completions,body,workSess,score,habitRate}) {
     </div>
   );
 }
+
+// Compact compare-metric block (current vs prev + delta arrow)
+const CompareMetric = ({label, cur, prev, suffix}) => {
+  const curN = typeof cur === "number" ? cur : parseFloat(cur);
+  const prevN = typeof prev === "number" ? prev : parseFloat(prev);
+  const hasDelta = !isNaN(curN) && !isNaN(prevN);
+  const d = hasDelta ? Math.round((curN - prevN) * 10) / 10 : null;
+  const up = d != null && d >= 0;
+  return (
+    <div style={{background:C.card2,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px"}}>
+      <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.4,textTransform:"uppercase"}}>{label}</div>
+      <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:4}}>
+        <div style={{fontSize:18,fontWeight:800,color:C.text,letterSpacing:-0.4}}>{cur}{suffix}</div>
+        <div style={{fontSize:11,color:C.text4,fontWeight:500}}>vs {prev}{suffix}</div>
+      </div>
+      {d != null && (
+        <div style={{fontSize:11,fontWeight:700,color:up?C.green:C.red,marginTop:3,display:"inline-flex",alignItems:"center",gap:3}}>
+          <Icon name={up?"trendUp":"trendDown"} size={10}/>{up?"+":""}{d}{suffix}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // AI AGENT (actionable + sport tracking)
@@ -1139,6 +1379,46 @@ const detectSport = (msg) => {
     notes: msg.length > 120 ? msg.slice(0,120)+"…" : msg,
   };
 };
+
+// Mock AI fallback when VITE_ANTHROPIC_API_KEY is not set.
+// Uses real user data to produce coherent, contextual replies without network.
+function mockReply(msg, sc, bodyT, tasks, sportLog, habits) {
+  const m = msg.toLowerCase();
+  const activeTasks = (tasks||[]).filter(t=>!t.done);
+  const urg = activeTasks.filter(t=>normPrio(t.priority||t.urgency)==="high");
+  const recentSport = (sportLog||[]).slice(0,3);
+
+  if (/bonjour|salut|hello|hey|coucou/.test(m))
+    return `Salut. Score du jour : **${sc.pct}%** (${sc.done}/${sc.total}). ${sc.nnOk?"Les non-négos tiennent.":"⚠ Un non-négo est cassé — score plafonné à 70%."} Tu veux analyser ta journée ou ajouter une tâche ?`;
+
+  if (/analyse|7 jours|semaine|7 derniers/.test(m))
+    return `Analyse rapide :\n• Score du jour : **${sc.pct}%**\n• Non-négo : ${sc.nnDone}/${sc.nnTotal}\n• Sommeil : ${bodyT.sleep??"?"}h\n• Tâches actives : ${activeTasks.length} (dont ${urg.length} urgentes)\n• Sport récent : ${recentSport.length} séance${recentSport.length>1?"s":""}\n\n${sc.pct>=80?"Momentum solide — continue.":sc.pct>=60?"Correct. Verrouille les non-négos demain.":"Priorité : lock les non-négos avant tout le reste."}`;
+
+  if (/priorité|urgent|important|aujourd'?hui/.test(m)) {
+    if (urg.length === 0) return activeTasks.length ? `Aucune tâche urgente. Tu as ${activeTasks.length} tâches actives — attaque la première : **${activeTasks[0].title}**.` : "Aucune tâche urgente ni active. Journée ouverte — concentre-toi sur les non-négos.";
+    return `Priorités du jour (${urg.length} urgentes) :\n${urg.slice(0,5).map((t,i)=>`${i+1}. **${t.title}**${t.project?` · ${t.project}`:""}`).join("\n")}\n\nCommence par la 1.`;
+  }
+
+  if (/sommeil|sleep|dormi|fatigue/.test(m)) {
+    const h = bodyT.sleep;
+    if (!h) return "Pas encore de données sommeil aujourd'hui. Renseigne coucher + réveil en haut de Today.";
+    if (h >= 7.5) return `**${h}h** de sommeil — parfait. Tu as le carburant pour performer.`;
+    if (h >= 6) return `**${h}h** — acceptable mais pas optimal. Vise 7h30 min.`;
+    return `**${h}h** — dette de sommeil. Couche-toi 30min plus tôt ce soir.`;
+  }
+
+  if (/sport|entr[aâ]in|workout|training/.test(m)) {
+    if (!recentSport.length) return "Aucune séance loggée récemment. Tape par ex. *\"j'ai couru 5km\"* ou *\"séance boxe 6 rounds\"* pour logger.";
+    return `Dernières séances :\n${recentSport.map(s=>`• ${s.type} · ${s.date}${s.distance?` · ${s.distance}km`:""}${s.duration?` · ${s.duration}min`:""} · intensité ${s.intensity}/5`).join("\n")}`;
+  }
+
+  if (/conseil|aide|tip|recommande/.test(m)) {
+    const weak = (habits||[]).filter(h=>h.nn).slice(0,3).map(h=>h.label).join(", ");
+    return `Focus simple :\n1. Ferme les non-négos d'abord${weak?` (${weak})`:""}\n2. Un bloc focus de 90min avant midi\n3. Sommeil avant 23h\n\nLa discipline sur ces 3 points fait 80% des résultats.`;
+  }
+
+  return `Mode hors-ligne (pas de clé API). Je peux quand même exécuter des actions :\n• *ajoute une tâche : ...*\n• *crée une habitude : ...*\n• *j'ai couru 5km* (tracking sport auto)\n• *mes priorités* · *analyse ma semaine* · *mon sommeil*\n\nPour activer la vraie IA : ajoute \`VITE_ANTHROPIC_API_KEY\` dans ton .env et redémarre.`;
+}
 
 function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks,profile,score,habitRate,activeDayKey,sportLog,setSportLog,goals}) {
   const [msgs, setMsgs] = useState([]);
@@ -1318,10 +1598,21 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
 
     // Fallback to AI chat
     setLoading(true);
+    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      setMsgs(prev=>[...prev,{role:"assistant",content:mockReply(msg, score(activeDayKey), body[activeDayKey]||{}, tasks, sportLog, habits)}]);
+      setLoading(false);
+      return;
+    }
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages",{
         method:"POST",
-        headers:{"Content-Type":"application/json","anthropic-dangerous-direct-browser-access":"true"},
+        headers:{
+          "Content-Type":"application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access":"true",
+        },
         body:JSON.stringify({model:"claude-sonnet-4-5-20250929",max_tokens:1000,system:buildCtx(),messages:[...msgs,userMsg].map(m=>({role:m.role,content:m.content}))})
       });
       const data = await res.json();
@@ -1703,6 +1994,82 @@ const GOAL_LEVELS = [
   {id:"long",  label:"Long terme",  sub:"2026 entier", color:C.text2},
 ];
 
+function GoalCard({g, color, onEdit, onDelete, onProgress}) {
+  const t = parseFloat(g.target) || 0;
+  const cu = parseFloat(g.current) || 0;
+  const pct = t ? Math.min(Math.round((cu/t)*100), 100) : 0;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(String(cu));
+
+  useEffect(()=>{ setDraft(String(cu)); }, [cu]);
+
+  const commit = () => {
+    const v = parseFloat(draft);
+    if (!isNaN(v) && v >= 0) onProgress(Math.round(v*100)/100);
+    setEditing(false);
+  };
+  const step = (delta) => {
+    const unit = t > 1000 ? 100 : t > 100 ? 10 : 1;
+    const next = Math.max(0, Math.round((cu + delta*unit)*100)/100);
+    onProgress(next);
+  };
+
+  return (
+    <Card style={{padding:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:600,fontSize:15,letterSpacing:-0.2}}>{g.title}</div>
+          {g.why && <div style={{fontSize:12,color:C.text3,marginTop:4,fontStyle:"italic"}}>"{g.why}"</div>}
+        </div>
+        <div style={{display:"flex",gap:1,flexShrink:0}}>
+          <IconBtn name="edit" onClick={onEdit}/>
+          <IconBtn name="trash" onClick={onDelete}/>
+        </div>
+      </div>
+      {t > 0 && (
+        <>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11,color:C.text3,marginBottom:6,gap:8}}>
+            <span style={{textTransform:"capitalize"}}>{g.metric||"Progression"}</span>
+            <div style={{display:"inline-flex",alignItems:"center",gap:6}}>
+              <button onClick={()=>step(-1)} title="Diminuer" style={{
+                width:26,height:26,borderRadius:8,border:`1px solid ${C.border2}`,
+                background:C.card2,color:C.text2,cursor:"pointer",fontFamily:FONT,fontSize:14,fontWeight:700,padding:0
+              }}>−</button>
+              {editing ? (
+                <input
+                  autoFocus
+                  value={draft}
+                  onChange={e=>setDraft(e.target.value)}
+                  onBlur={commit}
+                  onKeyDown={e=>{ if(e.key==="Enter") commit(); if(e.key==="Escape"){ setDraft(String(cu)); setEditing(false);} }}
+                  type="number"
+                  style={{
+                    width:72,background:C.bg2,border:`1px solid ${color}60`,borderRadius:8,
+                    color:color,padding:"4px 8px",fontSize:13,fontWeight:700,outline:"none",
+                    textAlign:"center",fontFamily:FONT
+                  }}/>
+              ) : (
+                <button onClick={()=>setEditing(true)} title="Modifier" style={{
+                  minWidth:72,padding:"4px 10px",borderRadius:8,border:`1px solid ${C.border2}`,
+                  background:"transparent",color:color,fontSize:13,fontWeight:700,cursor:"pointer",
+                  fontFamily:FONT,letterSpacing:-0.2
+                }}>{cu}<span style={{color:C.text4,fontWeight:500}}>/{t}</span></button>
+              )}
+              <button onClick={()=>step(1)} title="Augmenter" style={{
+                width:26,height:26,borderRadius:8,border:`1px solid ${C.border2}`,
+                background:C.card2,color:C.text2,cursor:"pointer",fontFamily:FONT,fontSize:14,fontWeight:700,padding:0
+              }}>+</button>
+              <span style={{fontWeight:700,color:color,marginLeft:4,letterSpacing:-0.2}}>{pct}%</span>
+            </div>
+          </div>
+          <PBar value={pct} color={color} h={5}/>
+        </>
+      )}
+      {g.dueDate && <div style={{fontSize:11,color:C.text4,marginTop:8,display:"inline-flex",alignItems:"center",gap:4}}><Icon name="calendar" size={11}/> {fmtShort(g.dueDate)}</div>}
+    </Card>
+  );
+}
+
 function GoalsSection({back, goals, setGoals}) {
   const [form, setForm] = useState(null);
   const empty = {title:"",why:"",metric:"",target:"",current:"0",level:"short",dueDate:""};
@@ -1752,34 +2119,12 @@ function GoalsSection({back, goals, setGoals}) {
             <Card style={{padding:"12px 14px",fontSize:12,color:C.text4,textAlign:"center",background:C.card2}}>Aucun objectif</Card>
           ) : (
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {lv.items.map(g => {
-                const t = parseFloat(g.target)||0, cu = parseFloat(g.current)||0;
-                const pct = t ? Math.min(Math.round((cu/t)*100),100) : 0;
-                return (
-                  <Card key={g.id} style={{padding:14}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontWeight:600,fontSize:15,letterSpacing:-0.2}}>{g.title}</div>
-                        {g.why && <div style={{fontSize:12,color:C.text3,marginTop:4,fontStyle:"italic"}}>"{g.why}"</div>}
-                      </div>
-                      <div style={{display:"flex",gap:1,flexShrink:0}}>
-                        <IconBtn name="edit" onClick={()=>{setD({...g});setForm("edit");}}/>
-                        <IconBtn name="trash" onClick={()=>setGoals(p=>p.filter(x=>x.id!==g.id))}/>
-                      </div>
-                    </div>
-                    {t > 0 && (
-                      <>
-                        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.text3,marginBottom:5}}>
-                          <span>{g.metric||"Progression"}</span>
-                          <span style={{fontWeight:700,color:lv.color}}>{cu}/{t} · {pct}%</span>
-                        </div>
-                        <PBar value={pct} color={lv.color} h={5}/>
-                      </>
-                    )}
-                    {g.dueDate && <div style={{fontSize:11,color:C.text4,marginTop:8,display:"inline-flex",alignItems:"center",gap:4}}><Icon name="calendar" size={11}/> {fmtShort(g.dueDate)}</div>}
-                  </Card>
-                );
-              })}
+              {lv.items.map(g => (
+                <GoalCard key={g.id} g={g} color={lv.color}
+                  onEdit={()=>{setD({...g});setForm("edit");}}
+                  onDelete={()=>setGoals(p=>p.filter(x=>x.id!==g.id))}
+                  onProgress={(v)=>setGoals(p=>p.map(x=>x.id===g.id?{...x,current:String(v)}:x))}/>
+              ))}
             </div>
           )}
         </div>
