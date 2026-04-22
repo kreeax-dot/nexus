@@ -91,6 +91,9 @@ const ICONS = {
   filter: <polygon points="22 3 2 3 10 12.5 10 19 14 21 14 12.5 22 3"/>,
   settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></>,
   dumbbell: <><path d="M6.5 6.5L17.5 17.5"/><path d="M21 21l-1-1M3 3l1 1"/><path d="M18 22l4-4"/><path d="M2 6l4-4"/><path d="M3 10l7-7 4 4-7 7-4-4z"/><path d="M14 21l7-7-4-4-7 7 4 4z"/></>,
+  mic: <><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></>,
+  send: <><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></>,
+  sortDesc: <><line x1="11" y1="5" x2="20" y2="5"/><line x1="11" y1="12" x2="17" y2="12"/><line x1="11" y1="19" x2="14" y2="19"/><polyline points="3 8 6 5 9 8"/><line x1="6" y1="5" x2="6" y2="19"/></>,
 };
 
 const Icon = ({name, size=18, stroke=1.7, color="currentColor", style={}}) => (
@@ -324,7 +327,6 @@ const TABS = [
   {id:"today",   icon:"sun",          l:"Today"},
   {id:"tasks",   icon:"listCheck",    l:"Tasks"},
   {id:"analyse", icon:"bar",          l:"Analytics"},
-  {id:"ai",      icon:"sparkles",     l:"Agent"},
   {id:"me",      icon:"user",         l:"Me"},
 ];
 
@@ -463,7 +465,6 @@ export default function App() {
           {tab==="today"   && <TodayTab {...shared}/>}
           {tab==="tasks"   && <TasksTab {...shared}/>}
           {tab==="analyse" && <AnalyseTab {...shared}/>}
-          {tab==="ai"      && <AITab {...shared}/>}
           {tab==="me"      && <MeTab {...shared}/>}
         </main>
 
@@ -476,6 +477,9 @@ export default function App() {
           ))}
         </nav>
       </div>
+
+      {/* Global floating AI assistant — available on every page */}
+      <FloatingAgent {...shared}/>
 
       <style>{`
         *{box-sizing:border-box}
@@ -513,6 +517,44 @@ export default function App() {
 
         @keyframes b{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+        @keyframes pulseRing{0%{box-shadow:0 0 0 0 rgba(229,72,77,.55)}70%{box-shadow:0 0 0 12px rgba(229,72,77,0)}100%{box-shadow:0 0 0 0 rgba(229,72,77,0)}}
+        @keyframes agentSlideUp{from{opacity:0;transform:translateY(24px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+        /* Floating AI assistant */
+        .growth-fab{
+          position:fixed; right:24px; bottom:24px; z-index:60;
+          width:56px; height:56px; border-radius:50%;
+          background:linear-gradient(135deg, ${C.gold} 0%, ${C.goldD} 100%);
+          color:${C.bg}; border:none; cursor:pointer;
+          box-shadow:0 10px 30px rgba(245,192,86,.35), 0 4px 10px rgba(0,0,0,.3);
+          display:flex; align-items:center; justify-content:center;
+          transition:transform .22s cubic-bezier(.2,.8,.2,1), box-shadow .22s;
+        }
+        .growth-fab:hover{ transform:translateY(-2px) scale(1.04); box-shadow:0 14px 36px rgba(245,192,86,.45), 0 6px 14px rgba(0,0,0,.35); }
+        .growth-fab:active{ transform:translateY(0) scale(.97); }
+        .growth-agent-panel{
+          position:fixed; right:24px; bottom:96px; z-index:60;
+          width:min(420px, calc(100vw - 32px));
+          height:min(640px, calc(100vh - 120px));
+          background:${C.card}; border:1px solid ${C.border2};
+          border-radius:18px; overflow:hidden;
+          box-shadow:0 24px 60px rgba(0,0,0,.6), 0 8px 20px rgba(0,0,0,.4);
+          display:flex; flex-direction:column;
+        }
+        @media (max-width: 900px){
+          .growth-fab{ right:16px; bottom:calc(64px + 12px); width:52px; height:52px; }
+          .growth-agent-panel{
+            right:8px; left:8px; bottom:calc(64px + 12px);
+            width:auto; height:min(78vh, 620px);
+            border-radius:16px;
+          }
+        }
+        .growth-agent-backdrop{
+          position:fixed; inset:0; z-index:59;
+          background:rgba(5,8,13,.55); backdrop-filter:blur(4px);
+          animation:fadeIn .18s ease;
+        }
       `}</style>
     </div>
   );
@@ -756,6 +798,7 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
   const [newProject, setNewProject] = useState("");
   const [filter, setFilter] = useState("all");
   const [showDone, setShowDone] = useState(false);
+  const [sortBy, setSortBy] = useState("project"); // project | date_asc | date_desc | priority
 
   const empty = {title:"",priority:"medium",project:"",scheduledFor:"",notes:""};
   const [d, setD] = useState(empty);
@@ -793,16 +836,33 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
   let displayed = showDone ? done : active;
   if (filter !== "all") displayed = displayed.filter(t => t.project === filter);
 
+  const FAR = "9999-12-31";
   displayed = [...displayed].sort((a,b)=>{
+    if (sortBy === "priority") {
+      const pa = PRIORITY[normPrio(a.priority||a.urgency)].order;
+      const pb = PRIORITY[normPrio(b.priority||b.urgency)].order;
+      if (pa !== pb) return pa - pb;
+      return (a.scheduledFor||FAR).localeCompare(b.scheduledFor||FAR);
+    }
+    if (sortBy === "date_asc")  return (a.scheduledFor||FAR).localeCompare(b.scheduledFor||FAR);
+    if (sortBy === "date_desc") return (b.scheduledFor||"").localeCompare(a.scheduledFor||"");
+    // project: priority then date inside each group (grouping done below)
     const pa = PRIORITY[normPrio(a.priority||a.urgency)].order;
     const pb = PRIORITY[normPrio(b.priority||b.urgency)].order;
     if (pa !== pb) return pa - pb;
-    return (a.scheduledFor||"9999") > (b.scheduledFor||"9999") ? 1 : -1;
+    return (a.scheduledFor||FAR).localeCompare(b.scheduledFor||FAR);
   });
 
-  const byProject = filter === "all" && !showDone
+  const byProject = sortBy === "project" && filter === "all" && !showDone
     ? displayed.reduce((acc,t)=>{ const k = t.project||"Sans projet"; (acc[k]=acc[k]||[]).push(t); return acc; }, {})
     : null;
+
+  const SORTS = [
+    {id:"project",   label:"Projet",    icon:"briefcase"},
+    {id:"date_asc",  label:"Date ↑",    icon:"calendar"},
+    {id:"date_desc", label:"Date ↓",    icon:"calendar"},
+    {id:"priority",  label:"Priorité",  icon:"alert"},
+  ];
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
@@ -824,6 +884,24 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
         )}
         <div style={{flex:1}}/>
         <FilterChip active={showDone} onClick={()=>setShowDone(x=>!x)} color={C.green}>{showDone?"Terminées":"Actives"}</FilterChip>
+      </div>
+
+      {/* Sort row — minimal, keyboard friendly */}
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{fontSize:10,color:C.text4,fontWeight:700,letterSpacing:0.6,display:"inline-flex",alignItems:"center",gap:5,paddingRight:4}}>
+          <Icon name="sortDesc" size={12}/> TRI
+        </span>
+        {SORTS.map(s => (
+          <button key={s.id} onClick={()=>setSortBy(s.id)} style={{
+            padding:"5px 10px",borderRadius:999,fontSize:11,fontWeight:600,cursor:"pointer",
+            background: sortBy===s.id ? C.gold+"18" : "transparent",
+            border:`1px solid ${sortBy===s.id ? C.gold+"60" : C.border}`,
+            color: sortBy===s.id ? C.gold : C.text3,
+            display:"inline-flex",alignItems:"center",gap:5,fontFamily:FONT,transition:"all .15s",
+          }}>
+            {s.label}
+          </button>
+        ))}
       </div>
 
       {displayed.length === 0 && (
@@ -889,32 +967,56 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
 }
 
 const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
-  const p = PRIORITY[normPrio(task.priority||task.urgency)];
+  const prio = normPrio(task.priority||task.urgency);
+  const p = PRIORITY[prio];
   const due = task.scheduledFor;
   const isToday = due === todayStr();
   const isOverdue = due && due < todayStr() && !task.done;
+  const isHigh = prio === "high";
   return (
-    <Card style={{padding:12}}>
+    <Card style={{
+      padding:12,
+      position:"relative",
+      // Minimalist priority indicator: thin left accent only when high
+      borderLeft: isHigh ? `2px solid ${C.red}` : `1px solid ${C.border}`,
+      paddingLeft: isHigh ? 11 : 12,
+    }}>
       <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
         <button onClick={()=>setTasks(ts=>ts.map(t=>t.id===task.id?{...t,done:!t.done}:t))} style={{
-          width:20,height:20,borderRadius:6,border:`2px solid ${task.done?C.green:p.color}`,
+          width:20,height:20,borderRadius:6,
+          border:`1.5px solid ${task.done?C.green:C.border2}`,
           background:task.done?C.green:"transparent",cursor:"pointer",flexShrink:0,marginTop:2,
-          display:"flex",alignItems:"center",justifyContent:"center",padding:0
+          display:"flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .15s"
         }}>
           {task.done && <Icon name="check" size={11} color="#001a10" stroke={3}/>}
         </button>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{fontWeight:500,fontSize:14,textDecoration:task.done?"line-through":"none",color:task.done?C.text3:C.text}}>{task.title}</div>
-          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:5,alignItems:"center"}}>
-            <Badge color={p.color}>{p.label}</Badge>
-            {task.project && <Badge color={C.gold}>{task.project}</Badge>}
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            {isHigh && !task.done && (
+              <span title="Haute priorité" aria-label="Haute priorité" style={{
+                width:6,height:6,borderRadius:"50%",background:C.red,flexShrink:0,
+                boxShadow:`0 0 0 3px ${C.red}22`,
+              }}/>
+            )}
+            <div style={{fontWeight:500,fontSize:14,textDecoration:task.done?"line-through":"none",color:task.done?C.text3:C.text,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{task.title}</div>
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:5,alignItems:"center",fontSize:11,color:C.text3,fontWeight:500}}>
+            {task.project && (
+              <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                <span style={{width:5,height:5,borderRadius:"50%",background:C.gold,display:"inline-block"}}/>
+                {task.project}
+              </span>
+            )}
             {due && (
-              <span style={{fontSize:10,color:isOverdue?C.red:isToday?C.green:C.text4,fontWeight:600,display:"inline-flex",alignItems:"center",gap:3}}>
+              <span style={{color:isOverdue?C.red:isToday?C.green:C.text3,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
                 <Icon name="calendar" size={10}/> {fmtShort(due)}
               </span>
             )}
+            {prio === "low" && (
+              <span style={{color:C.text4,fontStyle:"italic"}}>basse</span>
+            )}
           </div>
-          {task.notes && <div style={{fontSize:12,color:C.text3,marginTop:6}}>{task.notes}</div>}
+          {task.notes && <div style={{fontSize:12,color:C.text3,marginTop:6,lineHeight:1.5}}>{task.notes}</div>}
         </div>
         <div style={{display:"flex",gap:1,flexShrink:0}}>
           {!isToday && !task.done && (
@@ -1380,7 +1482,7 @@ const detectSport = (msg) => {
   };
 };
 
-// Mock AI fallback when VITE_ANTHROPIC_API_KEY is not set.
+// Mock AI fallback — triggered silently when the AI endpoint is unreachable.
 // Uses real user data to produce coherent, contextual replies without network.
 function mockReply(msg, sc, bodyT, tasks, sportLog, habits) {
   const m = msg.toLowerCase();
@@ -1417,26 +1519,104 @@ function mockReply(msg, sc, bodyT, tasks, sportLog, habits) {
     return `Focus simple :\n1. Ferme les non-négos d'abord${weak?` (${weak})`:""}\n2. Un bloc focus de 90min avant midi\n3. Sommeil avant 23h\n\nLa discipline sur ces 3 points fait 80% des résultats.`;
   }
 
-  return `Mode hors-ligne (pas de clé API). Je peux quand même exécuter des actions :\n• *ajoute une tâche : ...*\n• *crée une habitude : ...*\n• *j'ai couru 5km* (tracking sport auto)\n• *mes priorités* · *analyse ma semaine* · *mon sommeil*\n\nPour activer la vraie IA : ajoute \`VITE_ANTHROPIC_API_KEY\` dans ton .env et redémarre.`;
+  return `Je peux toujours exécuter des commandes sans réseau :\n• *ajoute une tâche : ...*\n• *crée une habitude : ...*\n• *j'ai couru 5km* (tracking sport auto)\n• *mes priorités* · *analyse ma semaine* · *mon sommeil*`;
 }
 
-function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks,profile,score,habitRate,activeDayKey,sportLog,setSportLog,goals}) {
+// ─── AI backend: keyless by default (Pollinations, OpenAI-compatible) ────────
+// Override by setting VITE_AI_API_URL. Expected POST body: {model, messages}.
+// Response: OpenAI chat-completions shape — data.choices[0].message.content.
+const AI_URL   = import.meta.env.VITE_AI_API_URL   || "https://text.pollinations.ai/openai";
+const AI_MODEL = import.meta.env.VITE_AI_MODEL     || "openai";
+
+async function callAI({system, history, signal}) {
+  const messages = [
+    { role: "system", content: system },
+    ...history.map(m => ({ role: m.role, content: m.content })),
+  ];
+  const res = await fetch(AI_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: AI_MODEL, messages, max_tokens: 500 }),
+    signal,
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return (
+    data?.choices?.[0]?.message?.content ||
+    data?.content ||
+    (typeof data === "string" ? data : "")
+  );
+}
+
+// ─── Voice input hook (Web Speech API, FR) ───────────────────────────────────
+function useVoiceInput({ onResult, lang = "fr-FR" } = {}) {
+  const [state, setState] = useState("idle"); // idle | recording | processing
+  const [partial, setPartial] = useState("");
+  const recRef = useRef(null);
+
+  const supported = typeof window !== "undefined" &&
+    !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+
+  const start = useCallback(() => {
+    if (!supported) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const rec = new SR();
+    rec.lang = lang;
+    rec.interimResults = true;
+    rec.continuous = false;
+    let finalText = "";
+
+    rec.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t;
+        else interim += t;
+      }
+      setPartial(finalText + interim);
+    };
+    rec.onerror = () => { setState("idle"); setPartial(""); };
+    rec.onend = () => {
+      const text = (finalText || "").trim();
+      setState("idle");
+      setPartial("");
+      if (text && onResult) onResult(text);
+    };
+
+    recRef.current = rec;
+    try { rec.start(); setState("recording"); }
+    catch { setState("idle"); }
+  }, [supported, lang, onResult]);
+
+  const stop = useCallback(() => {
+    if (recRef.current) {
+      setState("processing");
+      try { recRef.current.stop(); } catch {/*noop*/}
+    }
+  }, []);
+
+  useEffect(() => () => {
+    try { recRef.current?.stop(); } catch {/*noop*/}
+  }, []);
+
+  return { supported, state, partial, start, stop };
+}
+
+// ─── AgentChat: the chat panel itself (used inside FloatingAgent) ────────────
+function AgentChat({habits,setHabits,completions,toggle,body,tasks,setTasks,profile,score,activeDayKey,sportLog,setSportLog,goals}) {
   const [msgs, setMsgs] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sportForm, setSportForm] = useState(false);
-  const [sport, setSport] = useState({type:"Course",date:activeDayKey,duration:"",distance:"",intensity:3,notes:""});
+  const abortRef = useRef(null);
   const bottom = useRef(null);
 
-  useEffect(()=>bottom.current?.scrollIntoView({behavior:"smooth"}),[msgs]);
+  useEffect(()=>bottom.current?.scrollIntoView({behavior:"smooth"}),[msgs,loading]);
+  useEffect(()=> () => abortRef.current?.abort(), []);
 
   const parseAction = (msg) => {
     const m = msg.toLowerCase().trim();
-    // Add task
     let r = msg.match(/^(?:ajoute|crée|create|add)\s+(?:une\s+)?t[âa]che\s*[:\-]?\s+(.+)$/i);
     if (r) return {type:"add_task", title: r[1].trim()};
-
-    // Add habit
     r = msg.match(/^(?:ajoute|crée|create|add)\s+(?:une\s+)?(?:habitude|routine)\s*[:\-]?\s+(.+)$/i);
     if (r) {
       const rest = r[1].trim();
@@ -1444,35 +1624,24 @@ function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks
       for (const k of Object.keys(CATS)) if (m.includes(k.toLowerCase())) cat = k;
       return {type:"add_habit", label: rest, cat, nn: /non.?n[ée]go/.test(m), freq:"daily"};
     }
-
-    // Remove habit
     r = msg.match(/^(?:supprime|enlève|retire|remove|delete)\s+(?:l['’]\s*)?(?:habitude|routine)\s*[:\-]?\s+(.+)$/i);
     if (r) return {type:"remove_habit", label: r[1].trim()};
-
-    // Remove habit on day
     r = msg.match(/^(?:retire|enlève|supprime)\s+(.+?)\s+(?:le\s+)?(dimanche|lundi|mardi|mercredi|jeudi|vendredi|samedi)s?$/i);
     if (r) {
       const day = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"].indexOf(r[2].toLowerCase());
       return {type:"remove_habit_day", label: r[1].trim(), day};
     }
-
-    // Toggle NN
     r = msg.match(/^(?:marque|rend[rs]?)\s+(.+?)\s+(?:comme\s+)?non[-\s]?n[ée]go(?:ciable)?$/i);
     if (r) return {type:"toggle_nn", label: r[1].trim()};
-
-    // Complete habit
     r = msg.match(/^(?:valide|complete|coche|marque)\s+(.+?)(?:\s+(?:aujourd'?hui|today))?$/i);
     if (r && !/^(?:valide|complete|coche|marque)\s*$/i.test(msg)) {
       return {type:"complete_habit", label: r[1].trim()};
     }
-
-    // Sport tracking — natural language (rename detected sport.type → sportType to avoid collision)
     const sport = detectSport(msg);
     if (sport) {
       const {type:sportType, ...rest} = sport;
       return {type:"log_sport", sportType, ...rest};
     }
-
     return null;
   };
 
@@ -1525,7 +1694,6 @@ function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks
           notes:action.notes||"",
         };
         setSportLog(p => [entry, ...(p||[])]);
-        // Compute suggestion from history
         const hist = (sportLog||[]).filter(s => s.type === entry.type);
         const total = hist.length;
         const lastSame = hist[0];
@@ -1559,7 +1727,7 @@ function AITab({habits,setHabits,completions,toggle,body,workSess,tasks,setTasks
     const urgTasks = tasks.filter(t=>!t.done && normPrio(t.priority||t.urgency)==="high");
     const recentSport = (sportLog||[]).slice(0,5).map(s=>`${s.type} ${s.date}${s.distance?` ${s.distance}km`:""}${s.duration?` ${s.duration}min`:""}${s.rounds?` ${s.rounds}rounds`:""}`).join(" | ");
     const habitList = habits.map(h=>`${h.label} (${h.cat}${h.nn?", NN":""})`).join(", ");
-    return `Tu es Growth Agent — assistant de performance. Parle français, direct et actionnable.
+    return `Tu es Growth Agent — assistant de performance. Parle français, direct et actionnable. Réponses courtes et précises (4-6 phrases max).
 
 CONTEXTE ${activeDayKey}:
 - Score: ${sc.pct}% (${sc.done}/${sc.total}) | Non-négo: ${sc.nnDone}/${sc.nnTotal} ${!sc.nnOk?"[broken]":"OK"}
@@ -1569,14 +1737,10 @@ CONTEXTE ${activeDayKey}:
 HABITUDES: ${habitList}
 SCORES 7J: ${lastN(7).map(d=>`${d.slice(5)}:${score(d).pct}%`).join(" ")}
 TÂCHES URGENTES: ${urgTasks.map(t=>t.title).join(", ")||"Aucune"}
-SPORT RÉCENT: ${recentSport||"Aucune"}
+SPORT RÉCENT: ${recentSport||"Aucun"}
 OBJECTIFS 2026: ${(goals||[]).map(g=>`[${g.level}] ${g.title}`).join(" | ")||"Aucun"}
 
-L'utilisateur peut te demander d'exécuter des actions ou tracker son sport:
-- "ajoute une tâche: X" / "crée une habitude: X" / "supprime l'habitude X"
-- "j'ai couru 5km" / "séance boxe 6 rounds" / "gym chest 1h" → loggé auto
-
-Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
+Sois précis, basé sur les vraies données.`;
   },[score,activeDayKey,body,tasks,sportLog,profile,habits,goals]);
 
   const send = async (overrideInput) => {
@@ -1586,7 +1750,7 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
     setMsgs(prev => [...prev, userMsg]);
     if (!overrideInput) setInput("");
 
-    // Try local action parsing first
+    // Local action parsing first — no network needed
     const action = parseAction(msg);
     if (action) {
       const result = executeAction(action);
@@ -1596,97 +1760,74 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
       }
     }
 
-    // Fallback to AI chat
+    // Free AI endpoint — with silent fallback to mock
     setLoading(true);
-    const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      setMsgs(prev=>[...prev,{role:"assistant",content:mockReply(msg, score(activeDayKey), body[activeDayKey]||{}, tasks, sportLog, habits)}]);
-      setLoading(false);
-      return;
-    }
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access":"true",
-        },
-        body:JSON.stringify({model:"claude-sonnet-4-5-20250929",max_tokens:1000,system:buildCtx(),messages:[...msgs,userMsg].map(m=>({role:m.role,content:m.content}))})
+      const reply = await callAI({
+        system: buildCtx(),
+        history: [...msgs, userMsg],
+        signal: controller.signal,
       });
-      const data = await res.json();
-      const reply = data.content?.find(c=>c.type==="text")?.text || data.error?.message || "Erreur API.";
-      setMsgs(prev=>[...prev,{role:"assistant",content:reply}]);
+      const clean = (reply || "").trim();
+      if (clean) {
+        setMsgs(prev => [...prev, {role:"assistant", content: clean}]);
+      } else {
+        throw new Error("empty reply");
+      }
     } catch {
-      setMsgs(prev=>[...prev,{role:"assistant",content:"Connexion impossible. Les actions directes et le tracking sport fonctionnent sans réseau."}]);
+      // Silent fallback — never show a raw error
+      setMsgs(prev => [...prev, {role:"assistant", content: mockReply(msg, score(activeDayKey), body[activeDayKey]||{}, tasks, sportLog, habits)}]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  const saveSport = () => {
-    const entry = {...sport, id:Date.now().toString(), distance:parseFloat(sport.distance)||0, duration:parseFloat(sport.duration)||0};
-    setSportLog(prev => [entry, ...(prev||[])]);
-    setSportForm(false);
-    setSport({type:"Course",date:activeDayKey,duration:"",distance:"",intensity:3,notes:""});
-    const m = `Séance enregistrée: ${entry.type}${entry.distance?` ${entry.distance}km`:""}${entry.duration?` ${entry.duration}min`:""}, intensité ${entry.intensity}/5. Analyse brève ?`;
-    setTimeout(()=>send(m), 200);
-  };
+  // Voice input
+  const voice = useVoiceInput({
+    onResult: (text) => {
+      setInput(text);
+      // Auto-send after transcription
+      setTimeout(() => send(text), 50);
+    }
+  });
+  const recording = voice.state === "recording";
 
   const QUICK = [
-    "Analyse mes 7 derniers jours",
-    "Mes priorités urgentes aujourd'hui",
-    "j'ai couru 5km ce matin",
+    "Analyse ma semaine",
+    "Mes priorités urgentes",
     "ajoute une tâche : appeler fournisseur",
-    "crée une habitude : boire 3L d'eau",
   ];
 
   return (
-    <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 180px)",animation:"fadeIn .3s"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-        <div>
-          <div style={{fontWeight:700,fontSize:22,lineHeight:1,letterSpacing:-0.5,display:"inline-flex",alignItems:"center",gap:8}}>
-            <Icon name="sparkles" size={20} color={C.gold}/> Growth Agent
-          </div>
-          <div style={{fontSize:11,color:C.text3,marginTop:4}}>Actions directes · sport tracking · conseils data-driven</div>
-        </div>
-        <Btn onClick={()=>setSportForm(true)} variant="green" style={{padding:"7px 12px",fontSize:12}}>
-          <Icon name="plus" size={13}/> Séance
-        </Btn>
-      </div>
-
-      <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,paddingBottom:8}}>
-        {msgs.length===0 && (
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <Card style={{padding:16,background:`linear-gradient(135deg, ${C.gold}0a, transparent)`}}>
-              <div style={{fontSize:13,color:C.text2,lineHeight:1.6}}>
-                <div style={{fontWeight:700,color:C.gold,marginBottom:6,display:"inline-flex",alignItems:"center",gap:6}}>
-                  <Icon name="sparkles" size={14}/> Je peux agir sur ton app
-                </div>
-                <div style={{fontSize:12}}>Écris des commandes directes comme :</div>
-                <ul style={{margin:"6px 0 0",paddingLeft:18,fontSize:12,color:C.text3,lineHeight:1.8}}>
-                  <li><code style={codeS}>ajoute une tâche : appeler fournisseur</code></li>
-                  <li><code style={codeS}>crée une habitude : méditer 5min</code></li>
-                  <li><code style={codeS}>supprime l'habitude boxe</code></li>
-                  <li><code style={codeS}>j'ai couru 5km ce matin</code></li>
-                  <li><code style={codeS}>séance boxe 6 rounds intense</code></li>
-                </ul>
+    <div style={{display:"flex",flexDirection:"column",height:"100%",fontFamily:FONT}}>
+      <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:10,padding:"4px 2px 8px"}}>
+        {msgs.length === 0 && (
+          <div style={{display:"flex",flexDirection:"column",gap:10,animation:"fadeIn .3s"}}>
+            <div style={{textAlign:"center",padding:"20px 8px 6px"}}>
+              <div style={{display:"inline-flex",width:44,height:44,borderRadius:14,background:`linear-gradient(135deg, ${C.gold}22, ${C.green}16)`,border:`1px solid ${C.gold}30`,alignItems:"center",justifyContent:"center",marginBottom:10}}>
+                <Icon name="sparkles" size={20} color={C.gold}/>
               </div>
-            </Card>
-            {QUICK.map(q=>(
-              <button key={q} onClick={()=>send(q)} style={{textAlign:"left",padding:"11px 14px",borderRadius:11,background:C.card,border:`1px solid ${C.border}`,color:C.text2,fontSize:13,cursor:"pointer",fontFamily:FONT}}>{q}</button>
-            ))}
+              <div style={{fontSize:18,fontWeight:700,letterSpacing:-0.4,color:C.text}}>How can I help you?</div>
+              <div style={{fontSize:12,color:C.text3,marginTop:6,lineHeight:1.6}}>Écris ou parle — je peux créer des tâches, habitudes, logger tes séances sport et analyser ta performance.</div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {QUICK.map(q=>(
+                <button key={q} onClick={()=>send(q)} style={{textAlign:"left",padding:"10px 14px",borderRadius:10,background:C.card2,border:`1px solid ${C.border}`,color:C.text2,fontSize:13,cursor:"pointer",fontFamily:FONT}}>{q}</button>
+              ))}
+            </div>
           </div>
         )}
         {msgs.map((m,i)=>(
           <div key={i} style={{display:"flex",justifyContent:m.role==="user"?"flex-end":"flex-start"}}>
             <div style={{
-              maxWidth:"88%",padding:"12px 16px",
-              borderRadius:m.role==="user"?"16px 16px 4px 16px":"16px 16px 16px 4px",
+              maxWidth:"88%",padding:"11px 14px",
+              borderRadius:m.role==="user"?"14px 14px 4px 14px":"14px 14px 14px 4px",
               background: m.role==="user" ? C.gold : m.action ? C.green+"14" : C.card,
               color: m.role==="user" ? "#0a0a0a" : C.text,
               border: m.role==="assistant" ? `1px solid ${m.action?C.green+"30":C.border}` : "none",
-              fontSize:14,lineHeight:1.6,whiteSpace:"pre-wrap",fontFamily:FONT
+              fontSize:14,lineHeight:1.55,whiteSpace:"pre-wrap",fontFamily:FONT
             }}>
               {m.content.split(/(\*\*[^*]+\*\*)/g).map((part,i)=>
                 part.startsWith("**")
@@ -1698,49 +1839,149 @@ Sois précis, basé sur les vraies données. Donne des conseils actionnables.`;
         ))}
         {loading && (
           <div style={{display:"flex"}}>
-            <div style={{padding:"12px 16px",background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px 16px 16px 4px",display:"flex",gap:5,alignItems:"center"}}>
+            <div style={{padding:"12px 16px",background:C.card,border:`1px solid ${C.border}`,borderRadius:"14px 14px 14px 4px",display:"flex",gap:5,alignItems:"center"}}>
               {[0,1,2].map(i=><span key={i} style={{width:6,height:6,borderRadius:"50%",background:C.gold,display:"inline-block",animation:`b .8s ${i*.15}s infinite`}}/>)}
+            </div>
+          </div>
+        )}
+        {recording && (
+          <div style={{display:"flex",justifyContent:"center"}}>
+            <div style={{padding:"10px 14px",background:C.red+"14",border:`1px solid ${C.red}40`,borderRadius:20,fontSize:12,color:C.red,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:C.red,animation:"pulse 1.2s infinite"}}/>
+              Écoute… {voice.partial && <span style={{color:C.text2,fontWeight:500,fontStyle:"italic"}}>"{voice.partial}"</span>}
             </div>
           </div>
         )}
         <div ref={bottom}/>
       </div>
 
-      <div style={{display:"flex",gap:8,paddingTop:10,borderTop:`1px solid ${C.border}`,background:C.bg}}>
-        <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()} placeholder="Message ou commande…" style={{flex:1,background:C.card,border:`1px solid ${C.border}`,borderRadius:10,color:C.text,padding:"11px 14px",fontSize:14,outline:"none",fontFamily:FONT}}/>
-        <Btn onClick={()=>send()} disabled={loading} style={{padding:"11px 14px"}}><Icon name="arrowUp" size={16}/></Btn>
+      <div style={{display:"flex",gap:8,paddingTop:10,borderTop:`1px solid ${C.border}`,background:C.card,alignItems:"center"}}>
+        <input
+          value={input}
+          onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&send()}
+          disabled={recording}
+          placeholder={recording ? "Écoute en cours…" : "Message ou commande…"}
+          style={{flex:1,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"11px 14px",fontSize:14,outline:"none",fontFamily:FONT}}
+        />
+        {voice.supported && (
+          <button
+            type="button"
+            onClick={recording ? voice.stop : voice.start}
+            disabled={loading}
+            title={recording ? "Arrêter" : "Voix"}
+            aria-label={recording ? "Arrêter l'enregistrement" : "Entrée vocale"}
+            style={{
+              width:42,height:42,borderRadius:12,
+              border:`1px solid ${recording?C.red:C.border2}`,
+              background: recording ? C.red+"1a" : "transparent",
+              color: recording ? C.red : C.text2,
+              cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",
+              transition:"all .15s",flexShrink:0,fontFamily:FONT,
+              animation: recording ? "pulseRing 1.4s infinite" : "none",
+            }}>
+            <Icon name="mic" size={18}/>
+          </button>
+        )}
+        <button
+          onClick={()=>send()}
+          disabled={loading || !input.trim()}
+          aria-label="Envoyer"
+          style={{
+            width:42,height:42,borderRadius:12,border:"none",
+            background: (loading||!input.trim()) ? C.border : `linear-gradient(135deg, ${C.gold}, ${C.goldD})`,
+            color:"#0a0a0a",cursor:(loading||!input.trim())?"not-allowed":"pointer",
+            display:"inline-flex",alignItems:"center",justifyContent:"center",
+            flexShrink:0,fontFamily:FONT,transition:"all .15s"
+          }}>
+          <Icon name="send" size={16}/>
+        </button>
       </div>
-
-      {sportForm && (
-        <Modal title="Nouvelle séance sport" onClose={()=>setSportForm(false)}>
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            <FSelect label="TYPE" value={sport.type} onChange={e=>setSport(p=>({...p,type:e.target.value}))} options={SPORT_TYPES}/>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <FInput label="DATE" value={sport.date} onChange={e=>setSport(p=>({...p,date:e.target.value}))} type="date"/>
-              <FInput label="DURÉE (MIN)" value={sport.duration} onChange={e=>setSport(p=>({...p,duration:e.target.value}))} type="number" placeholder="60"/>
-            </div>
-            {sport.type === "Course" && <FInput label="DISTANCE (KM)" value={sport.distance} onChange={e=>setSport(p=>({...p,distance:e.target.value}))} type="number" placeholder="10.5"/>}
-            <div>
-              <div style={{fontSize:11,color:C.text3,fontWeight:600,marginBottom:8,letterSpacing:0.4}}>INTENSITÉ · {sport.intensity}/5</div>
-              <div style={{display:"flex",gap:7}}>
-                {[1,2,3,4,5].map(i=>{
-                  const c=[C.green,"#6be8b3",C.gold,"#e88556",C.red][i-1];
-                  return <button key={i} onClick={()=>setSport(p=>({...p,intensity:i}))} style={{flex:1,padding:"10px 0",borderRadius:9,border:`2px solid ${sport.intensity>=i?c:C.border2}`,background:sport.intensity>=i?c+"18":"transparent",color:sport.intensity>=i?c:C.text4,fontSize:14,fontWeight:700,cursor:"pointer",fontFamily:FONT}}>{i}</button>;
-                })}
-              </div>
-            </div>
-            <FText label="NOTES" value={sport.notes} onChange={e=>setSport(p=>({...p,notes:e.target.value}))} placeholder="Comment tu t'es senti…"/>
-            <Btn onClick={saveSport} variant="green" style={{width:"100%",padding:"13px",fontSize:14}}>
-              <Icon name="check" size={15}/> Enregistrer & analyser
-            </Btn>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }
 
-const codeS = {background:C.bg2,padding:"2px 6px",borderRadius:4,fontSize:11,color:C.gold,fontFamily:"'SF Mono', Consolas, monospace"};
+// ─── Global FloatingAgent: FAB + slide-up drawer, available on every page ──
+function FloatingAgent(shared) {
+  const [open, setOpen] = useState(false);
+
+  // Close on Esc
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  return (
+    <>
+      {/* Floating action button */}
+      <button
+        onClick={()=>setOpen(o=>!o)}
+        aria-label={open ? "Fermer l'assistant" : "Ouvrir l'assistant"}
+        className="growth-fab"
+        style={{
+          position:"fixed", zIndex:420,
+          width:56, height:56, borderRadius:"50%",
+          background: open
+            ? C.card
+            : `linear-gradient(135deg, ${C.gold}, ${C.goldD})`,
+          border: open ? `1px solid ${C.border2}` : "none",
+          cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center",
+          boxShadow: open
+            ? "0 10px 30px -12px rgba(0,0,0,0.6)"
+            : "0 10px 30px -8px rgba(245,192,86,0.45), 0 0 0 4px rgba(245,192,86,0.08)",
+          transition:"transform .18s, background .2s, box-shadow .2s",
+          transform: open ? "rotate(90deg)" : "none",
+          fontFamily: FONT,
+        }}>
+        <Icon name={open ? "x" : "sparkles"} size={22} color={open ? C.text : "#0a0a0a"}/>
+      </button>
+
+      {/* Backdrop + panel */}
+      {open && (
+        <>
+          <div
+            onClick={()=>setOpen(false)}
+            style={{
+              position:"fixed", inset:0, zIndex:410,
+              background:"rgba(0,0,0,0.55)", backdropFilter:"blur(4px)",
+              animation:"fadeIn .18s ease-out",
+            }}/>
+          <div
+            role="dialog"
+            aria-label="Assistant IA"
+            className="growth-agent-panel"
+            onClick={e=>e.stopPropagation()}
+            style={{
+              position:"fixed", zIndex:415,
+              background:C.card, border:`1px solid ${C.border2}`,
+              display:"flex", flexDirection:"column",
+              animation:"agentSlideUp .24s cubic-bezier(.2,.8,.2,1)",
+              fontFamily: FONT,
+            }}>
+            <div style={{
+              display:"flex",alignItems:"center",justifyContent:"space-between",
+              padding:"14px 16px",borderBottom:`1px solid ${C.border}`
+            }}>
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+                <Icon name="sparkles" size={18} color={C.gold}/>
+                <div style={{minWidth:0}}>
+                  <div style={{fontWeight:700,fontSize:15,letterSpacing:-0.3,color:C.text}}>Growth Agent</div>
+                  <div style={{fontSize:10,color:C.text4,fontWeight:500,letterSpacing:0.3}}>Voix · Texte · Actions</div>
+                </div>
+              </div>
+              <IconBtn name="x" onClick={()=>setOpen(false)} size={18}/>
+            </div>
+            <div style={{flex:1,minHeight:0,padding:"10px 14px 14px",display:"flex",flexDirection:"column"}}>
+              <AgentChat {...shared}/>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ME (HUB)
