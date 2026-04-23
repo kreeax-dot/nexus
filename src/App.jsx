@@ -166,9 +166,23 @@ const monthRange = (year, month) => {
   const days = new Date(year, month+1, 0).getDate();
   return Array.from({length:days},(_,i)=>`${year}-${String(month+1).padStart(2,"0")}-${String(i+1).padStart(2,"0")}`);
 };
+// A habit is applicable on day `dk` iff:
+//   • the day-of-week matches its frequency rule, AND
+//   • dk >= its creation date (no backdating of newly added habits), AND
+//   • dk falls inside one of its active ranges (if any — supports pause/resume).
+// Habits without `createdAt` (seeded defaults / legacy) are treated as always existent.
+// Habits without `activeRanges` are treated as always active since creation.
+const isActiveOn = (h, dk) => {
+  if (!h.activeRanges || !Array.isArray(h.activeRanges) || h.activeRanges.length === 0) return true;
+  return h.activeRanges.some(r => dk >= r.from && (!r.to || dk <= r.to));
+};
 const isApplicable = (h, dk) => {
   const dow = parseDate(dk).getDay();
-  return h.freq === "daily" || (h.freq === "specific" && (h.days || []).includes(dow));
+  const freqMatch = h.freq === "daily" || (h.freq === "specific" && (h.days || []).includes(dow));
+  if (!freqMatch) return false;
+  if (h.createdAt && dk < h.createdAt) return false; // no backdating
+  if (!isActiveOn(h, dk)) return false;              // currently inactive on this date
+  return true;
 };
 // Calculate sleep duration from wake & bed times (bed is previous evening)
 const calcSleep = (bedTime, wakeTime) => {
@@ -366,6 +380,99 @@ const TABS = [
   {id:"me",      icon:"user",         l:"Me"},
 ];
 
+// ─── FOCUS TIMER (global, persistent) ────────────────────────────────────────
+// Elapsed is derived from Date.now() - startTs so it is:
+//   • correct after navigating between tabs (state lives at App root)
+//   • correct after refresh / reopen (state restored from localStorage)
+// The ticker only exists to force re-renders; it never accumulates state.
+const TIMER_KEY = "growth.focusTimer.v1";
+function useFocusTimer(setWorkSess) {
+  const load = () => {
+    try {
+      const raw = localStorage.getItem(TIMER_KEY);
+      if (!raw) return null;
+      const v = JSON.parse(raw);
+      if (!v || typeof v !== "object" || !v.running || !v.startTs) return null;
+      return v;
+    } catch { return null; }
+  };
+  const [state, setState] = useState(() => load() || {
+    running:false, startTs:null, targetMin:0, selTask:"", focus:"",
+  });
+  const [, forceTick] = useState(0);
+
+  // Persist every state change.
+  useEffect(() => {
+    try {
+      if (state.running) localStorage.setItem(TIMER_KEY, JSON.stringify(state));
+      else localStorage.removeItem(TIMER_KEY);
+    } catch {/* ignore quota / private-mode errors */}
+  }, [state]);
+
+  // Tick (1s) only while running — advances the displayed elapsed.
+  useEffect(() => {
+    if (!state.running) return;
+    const id = setInterval(() => forceTick(x => (x + 1) & 0xffff), 1000);
+    return () => clearInterval(id);
+  }, [state.running]);
+
+  // Sync across tabs / windows.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== TIMER_KEY) return;
+      const v = load();
+      if (v) setState(v);
+      else setState(s => ({...s, running:false, startTs:null}));
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const elapsedSec = state.running && state.startTs
+    ? Math.max(0, Math.floor((Date.now() - state.startTs) / 1000))
+    : 0;
+
+  const start = (targetMin = 0, opts = {}) => {
+    setState({
+      running:true,
+      startTs: Date.now(),
+      targetMin,
+      selTask: opts.selTask ?? state.selTask ?? "",
+      focus:   opts.focus   ?? state.focus   ?? "",
+    });
+  };
+
+  const stop = (dateKey) => {
+    if (!state.running || !state.startTs) {
+      setState(s => ({...s, running:false, startTs:null, targetMin:0}));
+      return 0;
+    }
+    const dur = Math.round((Date.now() - state.startTs) / 60000);
+    if (dur > 0 && typeof setWorkSess === "function") {
+      setWorkSess(prev => [...(prev||[]), {
+        id: Date.now().toString(),
+        date: dateKey,
+        duration: dur,
+        task: state.selTask || "",
+        focus: state.focus || "",
+      }]);
+    }
+    setState(s => ({...s, running:false, startTs:null, targetMin:0}));
+    return dur;
+  };
+
+  const updateMeta = (patch) => setState(s => ({...s, ...patch}));
+
+  // Auto-stop when a timed session reaches its target (checked on every tick).
+  useEffect(() => {
+    if (!state.running || !state.targetMin) return;
+    if (elapsedSec >= state.targetMin * 60) stop(todayStr());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elapsedSec, state.running, state.targetMin]);
+
+  return { state, elapsedSec, start, stop, updateMeta };
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ROOT
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -387,7 +494,15 @@ export default function App() {
 
   const nHabits = useMemo(()=> (habits||[]).map(h => ({...h, cat: normCat(h.cat)})), [habits]);
 
+  // Data cutoff — everything before this date is treated as "no data".
+  // Prevents false-negative stats on days the app wasn't being used.
+  const dataStartDate = profile?.dataStartDate || "";
+
   const score = useCallback((dk) => {
+    // Before the data-cutoff → act as if the user simply wasn't tracking.
+    if (dataStartDate && dk < dataStartDate) {
+      return {pct:0,done:0,total:0,nnOk:true,nnDone:0,nnTotal:0};
+    }
     const comp = completions[dk] || {};
     const applicable = nHabits.filter(h => isApplicable(h, dk));
     if (!applicable.length) return {pct:0,done:0,total:0,nnOk:true,nnDone:0,nnTotal:0};
@@ -398,7 +513,7 @@ export default function App() {
     let pct = Math.round((done/applicable.length)*100);
     if (nnBroken) pct = Math.min(pct,70);
     return {pct,done,total:applicable.length,nnOk:!nnBroken,nnDone,nnTotal:nn.length};
-  }, [nHabits, completions]);
+  }, [nHabits, completions, dataStartDate]);
 
   const habitRate = useCallback((habit, windowDays=30, endKey=todayStr()) => {
     const id = habit.id;
@@ -442,6 +557,9 @@ export default function App() {
     setComp(prev => ({...prev, [k]: {...(prev[k]||{}), [id]: !(prev[k]||{})[id]}}));
   }, [activeDayKey, setComp]);
 
+  // Global focus timer — persists across tab navigation AND refresh (localStorage-backed).
+  const focusTimer = useFocusTimer(setWorkSess);
+
   if (!ready) return (
     <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14,fontFamily:FONT}}>
       <Logo size={48}/>
@@ -459,6 +577,7 @@ export default function App() {
     workSess, setWorkSess, journal, setJournal, profile, setProfile,
     sportLog, setSportLog, goals, setGoals,
     activeDayKey, setActiveDayKey, setTab,
+    focusTimer,
   };
 
   return (
@@ -924,13 +1043,16 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {dayTasks.map(t => {
               const prio = normPrio(t.priority||t.urgency);
-              const isHighPrio = prio === "high";
+              const p = PRIORITY[prio];
+              // Consistent with TasksTab: red/orange/grey left accent for all 3 levels.
+              const accent = prio === "high" ? C.red : prio === "medium" ? C.orange : C.grey + "66";
               return (
                 <button key={t.id} onClick={()=>toggleTask(t.id)} style={{
                   display:"flex",alignItems:"center",gap:11,padding:"11px 13px",
                   background: t.done ? C.bg2 : C.card2,
                   border:`1px solid ${t.done ? C.border : C.border2}`,
-                  borderLeft: isHighPrio && !t.done ? `2px solid ${C.red}` : `1px solid ${t.done?C.border:C.border2}`,
+                  borderLeft: t.done ? `1px solid ${C.border}` : `3px solid ${accent}`,
+                  paddingLeft: t.done ? 13 : 11,
                   borderRadius:12,cursor:"pointer",color:C.text,fontFamily:FONT,textAlign:"left",
                   transition:"border-color .2s, background .2s, transform .12s",
                 }}>
@@ -943,8 +1065,15 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
                   }}>
                     {t.done && <Icon name="check" size={11} color="#002616" stroke={3}/>}
                   </div>
-                  <span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:t.done?"line-through":"none",color:t.done?C.text3:C.text}}>{t.title}</span>
-                  {t.project && <span style={{fontSize:10,color:C.text3,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}><span style={{width:4,height:4,borderRadius:"50%",background:C.gold}}/>{t.project}</span>}
+                  <span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:t.done?"line-through":"none",color:t.done?C.text3:C.text,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</span>
+                  {/* Importance dot + tiny label — same visual language as the Tasks page */}
+                  {!t.done && prio !== "low" && (
+                    <span title={`Importance ${p.label.toLowerCase()}`} style={{
+                      width:6,height:6,borderRadius:"50%",background:p.color,flexShrink:0,
+                      boxShadow:`0 0 0 3px ${p.color}22`,
+                    }}/>
+                  )}
+                  {t.project && <span style={{fontSize:10,color:C.text3,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}><span style={{width:4,height:4,borderRadius:"50%",background:C.gold}}/>{t.project}</span>}
                 </button>
               );
             })}
@@ -1046,7 +1175,8 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
   const [newProject, setNewProject] = useState("");
   const [filter, setFilter] = useState("all");
   const [showDone, setShowDone] = useState(false);
-  const [sortBy, setSortBy] = useState("project"); // project | date_asc | date_desc | due | priority
+  // Default sort: IMPORTANCE (high → medium → low) per product spec.
+  const [sortBy, setSortBy] = useState("priority"); // priority | project | date_asc | date_desc | due
   const [sortOpen, setSortOpen] = useState(false);
 
   const empty = {title:"",priority:"medium",project:"",scheduledFor:"",notes:""};
@@ -1062,11 +1192,19 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
     setForm(null); setEditTask(null); setD(empty);
   };
 
-  // Non-destructive: "Add to today" sets a separate `todayFor` field.
-  // The original `scheduledFor` (due date) is never modified.
-  const assignToToday = (id) => {
-    setTasks(p => (p||[]).map(t => t.id===id ? {...t, todayFor: todayStr()} : t));
+  // TOGGLE: clicking always flips whether this task is pinned to today.
+  // Never touches `scheduledFor` (due date) or any other field — only `todayFor`.
+  // When already in today for today's date → clear it. Otherwise → pin to today.
+  const toggleTaskToday = (id) => {
+    const t0 = todayStr();
+    setTasks(p => (p||[]).map(t => {
+      if (t.id !== id) return t;
+      const pinned = t.todayFor === t0;
+      return {...t, todayFor: pinned ? "" : t0};
+    }));
   };
+  // Backwards-compat alias for older call-sites.
+  const assignToToday = toggleTaskToday;
 
   const addProject = () => {
     const v = newProject.trim();
@@ -1123,7 +1261,7 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
     {id:"date_asc",  label:"Date ↑ (anciens)", icon:"calendar"},
     {id:"date_desc", label:"Date ↓ (récents)", icon:"calendar"},
     {id:"due",       label:"Échéance",       icon:"clock"},
-    {id:"priority",  label:"Priorité",       icon:"alert"},
+    {id:"priority",  label:"Importance",     icon:"alert"},
   ];
   const activeSort = SORTS.find(s => s.id === sortBy) || SORTS[0];
 
@@ -1234,10 +1372,30 @@ function TasksTab({tasks,setTasks,projects,setProjects}) {
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <FInput label="TITRE *" value={d.title} onChange={e=>setD(p=>({...p,title:e.target.value}))} placeholder="Que faut-il faire ?"/>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <FSelect label="PRIORITÉ" value={d.priority} onChange={e=>setD(p=>({...p,priority:e.target.value}))} options={Object.entries(PRIORITY).map(([k,v])=>({value:k,label:v.label}))}/>
+              <FSelect label="IMPORTANCE" value={d.priority} onChange={e=>setD(p=>({...p,priority:e.target.value}))} options={Object.entries(PRIORITY).map(([k,v])=>({value:k,label:v.label}))}/>
               <FSelect label="PROJET" value={d.project} onChange={e=>setD(p=>({...p,project:e.target.value}))} options={[{value:"",label:"— Aucun —"},...allProjects.map(p=>({value:p,label:p}))]}/>
             </div>
-            <FInput label="ÉCHÉANCE" value={d.scheduledFor} onChange={e=>setD(p=>({...p,scheduledFor:e.target.value}))} type="date"/>
+            {/* ÉCHÉANCE — optional. A "Retirer" button clears the field so the task has no due date. */}
+            <div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:6}}>
+                <div style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.4}}>ÉCHÉANCE</div>
+                {d.scheduledFor && (
+                  <button
+                    type="button"
+                    onClick={()=>setD(p=>({...p,scheduledFor:""}))}
+                    style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:999,color:C.text3,fontSize:10,fontWeight:600,padding:"3px 9px",cursor:"pointer",fontFamily:FONT,display:"inline-flex",alignItems:"center",gap:4,transition:"all .15s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red+"50";e.currentTarget.style.color=C.red;}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text3;}}>
+                    <Icon name="x" size={10}/> Retirer la date
+                  </button>
+                )}
+              </div>
+              <input
+                type="date"
+                value={d.scheduledFor||""}
+                onChange={e=>setD(p=>({...p,scheduledFor:e.target.value}))}
+                style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"11px 13px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%",colorScheme:"dark"}}/>
+            </div>
             <FText label="NOTES" value={d.notes} onChange={e=>setD(p=>({...p,notes:e.target.value}))}/>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>{setForm(null);setEditTask(null);}} variant="ghost" style={{flex:1}}>Annuler</Btn>
@@ -1302,7 +1460,7 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             {!task.done && prio !== "low" && (
-              <span title={`Priorité ${p.label.toLowerCase()}`} aria-label={`Priorité ${p.label.toLowerCase()}`} style={{
+              <span title={`Importance ${p.label.toLowerCase()}`} aria-label={`Importance ${p.label.toLowerCase()}`} style={{
                 width:6,height:6,borderRadius:"50%",background:prioColor,flexShrink:0,
                 boxShadow:`0 0 0 3px ${prioColor}22`,
               }}/>
@@ -1312,7 +1470,7 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
           <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:5,alignItems:"center",fontSize:11,color:C.text3,fontWeight:500}}>
             {/* Priority badge — always visible for non-done tasks (subtle for low) */}
             {!task.done && (
-              <span title={`Priorité ${p.label.toLowerCase()}`} style={{
+              <span title={`Importance ${p.label.toLowerCase()}`} style={{
                 display:"inline-flex",alignItems:"center",gap:4,
                 padding:"2px 7px",borderRadius:999,
                 color: prioColor,
@@ -1344,9 +1502,20 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
           {task.notes && <div style={{fontSize:12,color:C.text3,marginTop:6,lineHeight:1.5}}>{task.notes}</div>}
         </div>
         <div style={{display:"flex",gap:1,flexShrink:0}}>
-          {!isInToday && !task.done && (
-            <IconBtn name="calendarPlus" onClick={onAssignToday} title="Ajouter à aujourd'hui" color={C.gold}/>
-          )}
+          {/* Today toggle — ALWAYS visible for non-done tasks. Active state shows
+              a filled green pin; inactive shows a neutral calendar-plus. Toggling
+              never touches the due date, only the `todayFor` field. */}
+          {!task.done && (() => {
+            const pinnedToday = task.todayFor === today;
+            return (
+              <IconBtn
+                name={pinnedToday ? "sun" : "calendarPlus"}
+                onClick={onAssignToday}
+                title={pinnedToday ? "Retirer d'aujourd'hui" : "Ajouter à aujourd'hui"}
+                color={pinnedToday ? C.green : C.gold}
+              />
+            );
+          })()}
           <IconBtn name="edit" onClick={onEdit} title="Modifier"/>
           <IconBtn name="trash" onClick={()=>setTasks(p=>p.filter(x=>x.id!==task.id))} title="Supprimer"/>
         </div>
@@ -1389,7 +1558,7 @@ function monthDaysUpTo(year, month, upToKey) {
   return monthRange(year, month).filter(dk => dk <= upToKey);
 }
 
-function AnalyseTab({habits, completions, body, workSess, score, habitRateRange}) {
+function AnalyseTab({habits, completions, body, workSess, score, habitRateRange, profile, setProfile}) {
   const [monthOffset, setMonthOffset] = useState(0); // 0 = current month
   const [compare, setCompare] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -1612,6 +1781,22 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange}
           <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,display:"inline-flex",alignItems:"center",gap:6}}>
             <Icon name="calendar" size={12}/> HEATMAP · <span style={{textTransform:"capitalize",color:C.text2,fontWeight:700}}>{monthName}</span>
           </div>
+          {/* Reset-before-date: any day strictly before this is treated as "no data" everywhere. */}
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10,color:C.text4,fontWeight:500}}>
+            <span title="Ignorer les jours avant cette date">Reset avant</span>
+            <input
+              type="date"
+              value={profile?.dataStartDate||""}
+              onChange={e=>setProfile(p=>({...p, dataStartDate:e.target.value||""}))}
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text2,padding:"4px 7px",fontSize:10,outline:"none",fontFamily:FONT,colorScheme:"dark"}}/>
+            {profile?.dataStartDate && (
+              <button onClick={()=>setProfile(p=>({...p, dataStartDate:""}))}
+                title="Annuler le reset"
+                style={{background:"transparent",border:"none",color:C.text3,cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center"}}>
+                <Icon name="x" size={12}/>
+              </button>
+            )}
+          </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)",gap:4,marginBottom:8}}>
           {DAY_NAMES.map((d,i)=><div key={i} style={{fontSize:9,color:C.text4,textAlign:"center",fontWeight:600,padding:"3px 0"}}>{d}</div>)}
@@ -1620,17 +1805,20 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange}
             const s = score(dk);
             const today = dk === todayKey;
             const future = dk > todayKey;
-            const hasData = (completions[dk] && Object.values(completions[dk]).some(v=>v)) || body[dk];
-            const bg = future ? C.bg2 : heatColor(s.pct, hasData);
+            const cutoff = profile?.dataStartDate || "";
+            const beforeCutoff = cutoff && dk < cutoff;
+            // Before cutoff → pretend there's no data, no matter what was logged.
+            const hasData = !beforeCutoff && ((completions[dk] && Object.values(completions[dk]).some(v=>v)) || body[dk]);
+            const bg = (future || beforeCutoff) ? C.bg2 : heatColor(s.pct, hasData);
             return (
-              <div key={dk} title={`${fmtShort(dk)}: ${future?"—":s.pct+"%"}`} style={{
+              <div key={dk} title={`${fmtShort(dk)}: ${future?"—":beforeCutoff?"reset":s.pct+"%"}`} style={{
                 aspectRatio:"1", borderRadius:6, background:bg,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:10,fontWeight:700,
-                color: future ? C.text4 : heatTextColor(s.pct),
+                color: (future || beforeCutoff) ? C.text4 : heatTextColor(s.pct),
                 border: today ? `2px solid ${C.gold}` : "none",
-                opacity: future?0.4:1
-              }}>{future?"":(hasData?new Date(dk+"T12:00").getDate():"")}</div>
+                opacity: future?0.4:beforeCutoff?0.35:1
+              }}>{future||beforeCutoff?"":(hasData?new Date(dk+"T12:00").getDate():"")}</div>
             );
           })}
         </div>
@@ -2367,9 +2555,46 @@ function RoutineSection({back, habits, setHabits}) {
 
   const save = () => {
     if (!d.label.trim()) return;
-    if (d.id) setHabits(p => p.map(h => h.id===d.id ? d : h));
-    else setHabits(p => [...(p||[]), {...d, id:"h"+Date.now()}]);
+    if (d.id) {
+      setHabits(p => p.map(h => h.id===d.id ? {...h, ...d} : h));
+    } else {
+      // New habit: stamp creation date AND open the first active range so it
+      // NEVER counts against days before it existed.
+      const today = todayStr();
+      setHabits(p => [...(p||[]), {
+        ...d,
+        id:"h"+Date.now(),
+        createdAt: today,
+        active: true,
+        activeRanges: [{from: today, to: null}],
+      }]);
+    }
     setForm(null); setD(empty);
+  };
+
+  // Toggle active/inactive for an existing habit.
+  // Inactive: close the currently-open range with today's date as `to`.
+  // Active:   open a new range starting today.
+  // Past days inside a previous active range remain counted — history unchanged.
+  const toggleActive = (habit) => {
+    const today = todayStr();
+    setHabits(p => (p||[]).map(h => {
+      if (h.id !== habit.id) return h;
+      const ranges = Array.isArray(h.activeRanges) ? [...h.activeRanges] : [];
+      const yesterday = addDays(today, -1);
+      const wasActive = h.active !== false;
+      if (wasActive) {
+        // Deactivate — close open range at yesterday so today is already inactive.
+        const idx = ranges.findIndex(r => !r.to);
+        if (idx >= 0) ranges[idx] = {...ranges[idx], to: yesterday};
+        else if (h.createdAt) ranges.push({from: h.createdAt, to: yesterday});
+        return {...h, active: false, activeRanges: ranges};
+      } else {
+        // Reactivate — open a new range from today.
+        ranges.push({from: today, to: null});
+        return {...h, active: true, activeRanges: ranges, createdAt: h.createdAt || today};
+      }
+    }));
   };
 
   const grouped = habits.reduce((acc,h)=>{
@@ -2392,20 +2617,42 @@ function RoutineSection({back, habits, setHabits}) {
               <span style={{fontSize:12,fontWeight:700,color:c.color,letterSpacing:0.6}}>{cat.toUpperCase()}</span>
               <span style={{fontSize:11,color:C.text4,marginLeft:"auto",fontWeight:500}}>{hs.length}</span>
             </div>
-            {hs.map(h=>(
-              <div key={h.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderTop:`1px solid ${C.border}`}}>
-                <div style={{width:3,height:30,background:c.color,borderRadius:99,flexShrink:0}}/>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:500,fontSize:14}}>{h.label}</div>
-                  <div style={{fontSize:11,color:C.text3,marginTop:2}}>
-                    {h.freq==="daily" ? "Quotidien" : (h.days||[]).map(i=>DAY_NAMES[i]).join(" · ")||"—"}
-                    {h.nn && " · Non-négociable"}
+            {hs.map(h=>{
+              const isActive = h.active !== false;
+              return (
+                <div key={h.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderTop:`1px solid ${C.border}`,opacity:isActive?1:0.55}}>
+                  <div style={{width:3,height:30,background:isActive?c.color:C.grey,borderRadius:99,flexShrink:0}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:500,fontSize:14,textDecoration:isActive?"none":"line-through"}}>{h.label}</div>
+                    <div style={{fontSize:11,color:C.text3,marginTop:2}}>
+                      {h.freq==="daily" ? "Quotidien" : (h.days||[]).map(i=>DAY_NAMES[i]).join(" · ")||"—"}
+                      {h.nn && " · Non-négociable"}
+                      {!isActive && " · Inactive"}
+                    </div>
                   </div>
+                  {/* Active toggle — INACTIVE hides from Today going forward without touching history */}
+                  <button
+                    onClick={()=>toggleActive(h)}
+                    title={isActive?"Désactiver (masquer d'aujourd'hui)":"Réactiver"}
+                    aria-label={isActive?"Désactiver":"Activer"}
+                    style={{
+                      position:"relative",width:34,height:20,borderRadius:999,
+                      background:isActive?C.green+"40":C.border2,
+                      border:`1px solid ${isActive?C.green+"66":C.border2}`,
+                      cursor:"pointer",transition:"all .2s",flexShrink:0,padding:0,
+                    }}>
+                    <span style={{
+                      position:"absolute",top:1,left:isActive?15:1,width:16,height:16,borderRadius:"50%",
+                      background:isActive?C.green:C.text4,
+                      transition:"left .2s, background .2s",
+                      boxShadow:isActive?`0 0 8px ${C.green}aa`:"none",
+                    }}/>
+                  </button>
+                  <IconBtn name="edit" onClick={()=>{setD({...h,days:h.days||[]});setForm("edit");}} title="Modifier"/>
+                  <IconBtn name="trash" onClick={()=>setHabits(p=>p.filter(x=>x.id!==h.id))} title="Supprimer"/>
                 </div>
-                <IconBtn name="edit" onClick={()=>{setD({...h,days:h.days||[]});setForm("edit");}} title="Modifier"/>
-                <IconBtn name="trash" onClick={()=>setHabits(p=>p.filter(x=>x.id!==h.id))} title="Supprimer"/>
-              </div>
-            ))}
+              );
+            })}
           </Card>
         );
       })}
@@ -2443,36 +2690,24 @@ function RoutineSection({back, habits, setHabits}) {
   );
 }
 
-function FocusSection({back, workSess, setWorkSess, tasks, activeDayKey}) {
-  const [running,setRunning] = useState(false);
-  const [elapsed,setElapsed] = useState(0);
-  const [selTask,setSelTask] = useState("");
-  const [focus,setFocus] = useState("");
-  const [targetMin,setTargetMin] = useState(0);
+function FocusSection({back, workSess, tasks, activeDayKey, focusTimer}) {
+  // Timer state is global (lives at App root, persists to localStorage) — survives
+  // tab navigation AND browser refresh. We only hold transient UI state here.
+  const { state: tState, elapsedSec: elapsed, start: tStart, stop: tStop, updateMeta } = focusTimer;
+  const running   = tState.running;
+  const targetMin = tState.targetMin || 0;
+  const selTask   = tState.selTask || "";
+  const focus     = tState.focus || "";
   const [custom,setCustom] = useState("");
-  const iv = useRef(null); const t0 = useRef(null);
 
   const fmt = s=>`${String(Math.floor(s/3600)).padStart(2,"0")}:${String(Math.floor((s%3600)/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const todayMin = workSess.filter(s=>s.date===activeDayKey).reduce((a,b)=>a+(b.duration||0),0);
   const weekMin = workSess.filter(s=>(new Date()-parseDate(s.date))/86400000<=7).reduce((a,b)=>a+(b.duration||0),0);
 
-  const start=(min=0)=>{
-    setTargetMin(min); setRunning(true);
-    t0.current=Date.now()-elapsed*1000;
-    iv.current=setInterval(()=>{
-      const s=Math.floor((Date.now()-t0.current)/1000);
-      setElapsed(s);
-      if(min>0&&s>=min*60) stop(s);
-    },1000);
-  };
-  const stop=(fe)=>{
-    clearInterval(iv.current); setRunning(false);
-    const dur=Math.round((fe??elapsed)/60);
-    if(dur>0) setWorkSess(prev=>[...prev,{id:Date.now().toString(),date:activeDayKey,duration:dur,task:selTask,focus}]);
-    setElapsed(0); setTargetMin(0);
-  };
-  useEffect(()=>()=>clearInterval(iv.current),[]);
-  const pct=targetMin>0?Math.min((elapsed/(targetMin*60))*100,100):0;
+  const start = (min=0) => tStart(min, { selTask, focus });
+  const stop  = () => tStop(activeDayKey);
+
+  const pct = targetMin > 0 ? Math.min((elapsed/(targetMin*60))*100,100) : 0;
   const last7Work = lastN(7).map(d=>({d,min:workSess.filter(s=>s.date===d).reduce((a,b)=>a+(b.duration||0),0)}));
 
   return (
@@ -2490,8 +2725,8 @@ function FocusSection({back, workSess, setWorkSess, tasks, activeDayKey}) {
                    : <Btn onClick={()=>start()} style={{padding:"10px 18px"}}><Icon name="play" size={14}/> Start</Btn>}
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
-          <FSelect label="TÂCHE LIÉE" value={selTask} onChange={e=>setSelTask(e.target.value)} options={[{value:"",label:"— Libre —"},...tasks.filter(t=>!t.done).map(t=>({value:t.title,label:t.title}))]}/>
-          <FInput label="FOCUS" value={focus} onChange={e=>setFocus(e.target.value)} placeholder="Sur quoi tu te concentres ?"/>
+          <FSelect label="TÂCHE LIÉE" value={selTask} onChange={e=>updateMeta({selTask:e.target.value})} options={[{value:"",label:"— Libre —"},...tasks.filter(t=>!t.done).map(t=>({value:t.title,label:t.title}))]}/>
+          <FInput label="FOCUS" value={focus} onChange={e=>updateMeta({focus:e.target.value})} placeholder="Sur quoi tu te concentres ?"/>
         </div>
         <div style={{fontSize:11,fontWeight:600,color:C.text3,marginBottom:8,letterSpacing:0.4}}>BLOC RAPIDE</div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:8}}>
