@@ -53,6 +53,8 @@ const C = {
   greenD: "#0f9c75",
   greenG: "#7cf2c8",          // highlight/glow edge
   red:    "#e5484d",
+  orange: "#f08a3e",          // priority medium
+  grey:   "#6a7385",          // priority low / neutral
 };
 const FONT = "'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
@@ -121,9 +123,9 @@ const normCat = c => CAT_ALIAS[c] || (CATS[c] ? c : "Discipline");
 
 // ─── PRIORITY ────────────────────────────────────────────────────────────────
 const PRIORITY = {
-  high:   { label: "Haute",   color: C.red,   order: 1 },
-  medium: { label: "Moyenne", color: C.gold,  order: 2 },
-  low:    { label: "Basse",   color: C.green, order: 3 },
+  high:   { label: "Haute",   color: C.red,    order: 1 },
+  medium: { label: "Moyenne", color: C.orange, order: 2 },
+  low:    { label: "Basse",   color: C.grey,   order: 3 },
 };
 const PRIO_ALIAS = { critique:"high", haute:"high", moyenne:"medium", basse:"low" };
 const normPrio = p => PRIO_ALIAS[p] || (PRIORITY[p] ? p : "medium");
@@ -625,11 +627,12 @@ export default function App() {
         /* Cards: hover lift on interactive surfaces (opt-in via .lift) */
         .growth-card.lift:hover{transform:translateY(-1px);border-color:${C.border2}}
 
-        /* Sleep grid */
-        .sleep-grid{display:grid;gap:10px;grid-template-columns:1fr 1fr 1fr}
-        @media (max-width: 560px){
-          .sleep-grid{grid-template-columns:1fr 1fr}
-          .sleep-duration{grid-column:1 / -1}
+        /* Sleep — always two equal columns for Réveil / Coucher, no overflow */
+        .sleep-times{display:grid;gap:10px;grid-template-columns:1fr 1fr;min-width:0}
+        .sleep-times .sleep-cell{min-width:0}
+        .sleep-times input[type="time"]{max-width:100%}
+        @media (max-width: 360px){
+          .sleep-reset-label{display:none}
         }
 
         /* Animations */
@@ -695,6 +698,12 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
   const [collapsed, setCollapsed] = useState({});
 
   const dayBody = body[viewDay] || {};
+  // Sleep on day N = bedTime stored on day N-1 (previous evening) + wakeTime on day N (this morning).
+  const prevDayKey = addDays(viewDay, -1);
+  const prevBody   = body[prevDayKey] || {};
+  const nightBedTime = prevBody.bedTime || "";
+  // Live computed duration (does not rely on stored sleep field).
+  const computedSleep = calcSleep(nightBedTime, dayBody.wakeTime);
   const isActive = viewDay === activeDayKey;
   const isFuture = viewDay > todayStr();
   const todayComp = completions[viewDay] || {};
@@ -725,17 +734,41 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
     [viewDay]: {...(prev[viewDay]||{}), ...patch}
   }));
 
+  // Correct sleep model: sleep belongs to day N (wake day) and is derived from
+  // body[N-1].bedTime + body[N].wakeTime. Bedtime set on day X affects day X+1's sleep.
   const handleSetWake = (v) => {
-    const patch = {wakeTime: v};
-    const sleep = calcSleep(dayBody.bedTime, v);
-    if (sleep !== null) patch.sleep = sleep;
-    updateBody(patch);
+    const sleep = calcSleep(nightBedTime, v);
+    setBody(prev => {
+      const cur = prev[viewDay] || {};
+      return {...prev, [viewDay]: {...cur, wakeTime: v, sleep: sleep}};
+    });
   };
   const handleSetBed = (v) => {
-    const patch = {bedTime: v};
-    const sleep = calcSleep(v, dayBody.wakeTime);
-    if (sleep !== null) patch.sleep = sleep;
-    updateBody(patch);
+    const nextKey = addDays(viewDay, 1);
+    setBody(prev => {
+      const cur  = prev[viewDay] || {};
+      const next = prev[nextKey] || {};
+      const nextSleep = calcSleep(v, next.wakeTime);
+      return {
+        ...prev,
+        [viewDay]: {...cur,  bedTime: v},
+        [nextKey]: {...next, sleep: nextSleep},
+      };
+    });
+  };
+  const handleResetSleep = () => {
+    const nextKey = addDays(viewDay, 1);
+    setBody(prev => {
+      const cur  = prev[viewDay] || {};
+      const next = prev[nextKey] || {};
+      // Clearing day N's bedTime must also invalidate day N+1's sleep (which depended on it).
+      const nextSleep = calcSleep("", next.wakeTime);
+      return {
+        ...prev,
+        [viewDay]: {...cur,  bedTime: "", wakeTime: "", sleep: null},
+        [nextKey]: {...next, sleep: nextSleep},
+      };
+    });
   };
 
   const handleClose = () => {
@@ -771,22 +804,23 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         )}
       </Card>
 
-      {/* Sleep inputs — Réveil left, Coucher right, reset clears all three fields */}
-      <Card style={{padding:16}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:0.8,display:"flex",alignItems:"center",gap:7,textTransform:"uppercase"}}>
-            <div style={{width:24,height:24,borderRadius:7,background:C.green+"14",border:`1px solid ${C.green}26`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      {/* Sleep — Réveil left / Coucher right, stable 2-col grid, Durée row below.
+          Sleep = previous day's bedtime + this day's wakeup. */}
+      <Card style={{padding:16,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12,minWidth:0}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.text3,letterSpacing:0.8,display:"flex",alignItems:"center",gap:7,textTransform:"uppercase",minWidth:0}}>
+            <div style={{width:24,height:24,borderRadius:7,background:C.green+"14",border:`1px solid ${C.green}26`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <Icon name="moon" size={12} color={C.green}/>
             </div>
-            Sommeil
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Sommeil</span>
           </div>
-          {(dayBody.bedTime || dayBody.wakeTime || dayBody.sleep != null) && (
+          {(dayBody.bedTime || dayBody.wakeTime || dayBody.sleep != null || computedSleep != null) && (
             <button
-              onClick={()=>updateBody({bedTime:"", wakeTime:"", sleep:null})}
+              onClick={handleResetSleep}
               title="Réinitialiser le sommeil"
               aria-label="Réinitialiser le sommeil"
               style={{
-                display:"inline-flex",alignItems:"center",gap:5,
+                display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,
                 padding:"5px 10px",borderRadius:999,
                 background:"transparent",border:`1px solid ${C.border2}`,
                 color:C.text3,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:FONT,
@@ -794,52 +828,59 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
               }}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=C.red+"50";e.currentTarget.style.color=C.red;}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border2;e.currentTarget.style.color=C.text3;}}>
-              <Icon name="rotate" size={12}/> Réinitialiser
+              <Icon name="rotate" size={12}/> <span className="sleep-reset-label">Réinitialiser</span>
             </button>
           )}
         </div>
-        <div className="sleep-grid">
-          {/* Réveil — LEFT */}
+        {/* Times row — always 2 equal columns, no overflow */}
+        <div className="sleep-times">
+          {/* Réveil — LEFT (this morning's wake) */}
           <div className="sleep-cell">
             <div style={{fontSize:10,color:C.text4,fontWeight:600,marginBottom:6,display:"flex",alignItems:"center",gap:4,letterSpacing:0.3,textTransform:"uppercase"}}>
               <Icon name="sunrise" size={11} color={C.gold}/> Réveil
             </div>
             <input type="time" value={dayBody.wakeTime||""} onChange={e=>handleSetWake(e.target.value)}
-              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"11px 13px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%",fontWeight:600,letterSpacing:-0.2}}/>
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 12px",fontSize:13,outline:"none",fontFamily:FONT,width:"100%",minWidth:0,fontWeight:600,letterSpacing:-0.2,boxSizing:"border-box"}}/>
           </div>
-          {/* Coucher — RIGHT */}
+          {/* Coucher — RIGHT (tonight's bedtime → feeds tomorrow's sleep) */}
           <div className="sleep-cell">
             <div style={{fontSize:10,color:C.text4,fontWeight:600,marginBottom:6,display:"flex",alignItems:"center",gap:4,letterSpacing:0.3,textTransform:"uppercase"}}>
               <Icon name="bed" size={11} color={C.green}/> Coucher
             </div>
             <input type="time" value={dayBody.bedTime||""} onChange={e=>handleSetBed(e.target.value)}
-              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"11px 13px",fontSize:14,outline:"none",fontFamily:FONT,width:"100%",fontWeight:600,letterSpacing:-0.2}}/>
+              style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,color:C.text,padding:"10px 12px",fontSize:13,outline:"none",fontFamily:FONT,width:"100%",minWidth:0,fontWeight:600,letterSpacing:-0.2,boxSizing:"border-box"}}/>
           </div>
-          {/* Durée — spans full width on mobile */}
-          <div className="sleep-cell sleep-duration" style={{
-            background: dayBody.sleep ? `linear-gradient(135deg, ${C.green}12, ${C.green}04)` : C.bg2,
-            border: `1px solid ${dayBody.sleep ? C.green+"30" : C.border2}`,
-            borderRadius:10,padding:"10px 14px",
-            display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
-            transition:"all .25s",
-          }}>
-            <div>
-              <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.3,textTransform:"uppercase"}}>Durée</div>
-              <div style={{fontSize:22,fontWeight:800,color:dayBody.sleep?C.green:C.text4,letterSpacing:-0.7,lineHeight:1.1,marginTop:2,textShadow:dayBody.sleep?`0 0 16px ${C.green}44`:"none"}}>
-                {dayBody.sleep ? `${dayBody.sleep}h` : "—"}
-              </div>
+        </div>
+        {/* Durée row — full width, computed live from previous bedtime + this wake */}
+        <div style={{
+          marginTop:10,
+          background: computedSleep ? `linear-gradient(135deg, ${C.green}12, ${C.green}04)` : C.bg2,
+          border: `1px solid ${computedSleep ? C.green+"30" : C.border2}`,
+          borderRadius:10,padding:"10px 14px",
+          display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,
+          transition:"all .25s",minWidth:0,
+        }}>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:10,color:C.text4,fontWeight:600,letterSpacing:0.3,textTransform:"uppercase"}}>Durée</div>
+            <div style={{fontSize:22,fontWeight:800,color:computedSleep?C.green:C.text4,letterSpacing:-0.7,lineHeight:1.1,marginTop:2,textShadow:computedSleep?`0 0 16px ${C.green}44`:"none"}}>
+              {computedSleep ? `${computedSleep}h` : "—"}
             </div>
-            {dayBody.sleep != null && (
-              <div style={{
-                fontSize:10,fontWeight:700,letterSpacing:0.4,textTransform:"uppercase",
-                color: dayBody.sleep >= 7.5 ? C.green : dayBody.sleep >= 6 ? C.gold : C.red,
-                padding:"3px 8px",borderRadius:999,
-                background: (dayBody.sleep >= 7.5 ? C.green : dayBody.sleep >= 6 ? C.gold : C.red) + "18",
-              }}>
-                {dayBody.sleep >= 7.5 ? "Optimal" : dayBody.sleep >= 6 ? "OK" : "Dette"}
+            {!computedSleep && !nightBedTime && (
+              <div style={{fontSize:10,color:C.text4,fontWeight:500,marginTop:3}}>
+                Pas de coucher enregistré hier
               </div>
             )}
           </div>
+          {computedSleep != null && (
+            <div style={{
+              fontSize:10,fontWeight:700,letterSpacing:0.4,textTransform:"uppercase",flexShrink:0,
+              color: computedSleep >= 7.5 ? C.green : computedSleep >= 6 ? C.gold : C.red,
+              padding:"3px 8px",borderRadius:999,
+              background: (computedSleep >= 7.5 ? C.green : computedSleep >= 6 ? C.gold : C.red) + "18",
+            }}>
+              {computedSleep >= 7.5 ? "Optimal" : computedSleep >= 6 ? "OK" : "Dette"}
+            </div>
+          )}
         </div>
       </Card>
 
@@ -1231,14 +1272,23 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
   const today = todayStr();
   const isInToday = task.todayFor === today || due === today;
   const isOverdue = due && due < today && !task.done;
-  const isHigh = prio === "high";
+  // Priority color system: high=red, medium=orange, low=grey (neutral).
+  // Dimmed when task is completed.
+  const prioColor = task.done ? C.text4 : p.color;
+  const prioAlpha = task.done ? "22" : "";
   return (
     <Card style={{
       padding:12,
       position:"relative",
-      // Minimalist priority indicator: thin left accent only when high
-      borderLeft: isHigh ? `2px solid ${C.red}` : `1px solid ${C.border}`,
-      paddingLeft: isHigh ? 11 : 12,
+      // Left-border accent colored by priority — subtle for low, strong for high.
+      borderLeft: task.done
+        ? `1px solid ${C.border}`
+        : prio === "high"
+          ? `3px solid ${C.red}`
+          : prio === "medium"
+            ? `3px solid ${C.orange}`
+            : `3px solid ${C.grey}66`,
+      paddingLeft: task.done ? 12 : 10,
     }}>
       <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
         <button onClick={()=>setTasks(ts=>ts.map(t=>t.id===task.id?{...t,done:!t.done}:t))} style={{
@@ -1251,15 +1301,29 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
         </button>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            {isHigh && !task.done && (
-              <span title="Haute priorité" aria-label="Haute priorité" style={{
-                width:6,height:6,borderRadius:"50%",background:C.red,flexShrink:0,
-                boxShadow:`0 0 0 3px ${C.red}22`,
+            {!task.done && prio !== "low" && (
+              <span title={`Priorité ${p.label.toLowerCase()}`} aria-label={`Priorité ${p.label.toLowerCase()}`} style={{
+                width:6,height:6,borderRadius:"50%",background:prioColor,flexShrink:0,
+                boxShadow:`0 0 0 3px ${prioColor}22`,
               }}/>
             )}
             <div style={{fontWeight:500,fontSize:14,textDecoration:task.done?"line-through":"none",color:task.done?C.text3:C.text,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis"}}>{task.title}</div>
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:5,alignItems:"center",fontSize:11,color:C.text3,fontWeight:500}}>
+            {/* Priority badge — always visible for non-done tasks (subtle for low) */}
+            {!task.done && (
+              <span title={`Priorité ${p.label.toLowerCase()}`} style={{
+                display:"inline-flex",alignItems:"center",gap:4,
+                padding:"2px 7px",borderRadius:999,
+                color: prioColor,
+                background: prio === "low" ? "transparent" : prioColor + "14",
+                border: `1px solid ${prio === "low" ? C.border2 : prioColor + "38"}`,
+                fontSize:10,fontWeight:700,letterSpacing:0.3,textTransform:"uppercase",
+              }}>
+                <span style={{width:5,height:5,borderRadius:"50%",background:prioColor,display:"inline-block"}}/>
+                {p.label}
+              </span>
+            )}
             {task.project && (
               <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
                 <span style={{width:5,height:5,borderRadius:"50%",background:C.gold,display:"inline-block"}}/>
@@ -1275,9 +1339,6 @@ const TaskCard = ({task,setTasks,onEdit,onAssignToday}) => {
               <span style={{color:C.green,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
                 <Icon name="sun" size={10}/> Aujourd'hui
               </span>
-            )}
-            {prio === "low" && (
-              <span style={{color:C.text4,fontStyle:"italic"}}>basse</span>
             )}
           </div>
           {task.notes && <div style={{fontSize:12,color:C.text3,marginTop:6,lineHeight:1.5}}>{task.notes}</div>}
