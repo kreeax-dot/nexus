@@ -506,12 +506,21 @@ export default function App() {
     const comp = completions[dk] || {};
     const applicable = nHabits.filter(h => isApplicable(h, dk));
     if (!applicable.length) return {pct:0,done:0,total:0,nnOk:true,nnDone:0,nnTotal:0};
+    // ─── WEIGHTED SCORE (internal) ─────────────────────────────────────────────
+    // Non-negotiables count double so that missing one drops the score harder
+    // and completing one lifts it more. No cap — score is a free 0–100%.
+    // UI-facing counts (done / total / nnDone / nnTotal) remain raw integers so
+    // existing labels and rendering stay identical — the weighting is purely
+    // internal to the percentage.
+    const weightOf = h => h.nn ? 2 : 1;
+    const totalWeight = applicable.reduce((s,h) => s + weightOf(h), 0);
+    const doneWeight  = applicable.reduce((s,h) => s + (comp[h.id] ? weightOf(h) : 0), 0);
+    const pct = totalWeight ? Math.round((doneWeight / totalWeight) * 100) : 0;
+    // Raw counts kept for UI compatibility (badges, "x/y" strings, NN hero card).
     const done = applicable.filter(h=>comp[h.id]).length;
     const nn = applicable.filter(h=>h.nn);
     const nnDone = nn.filter(h=>comp[h.id]).length;
     const nnBroken = nn.length > 0 && nnDone < nn.length;
-    let pct = Math.round((done/applicable.length)*100);
-    if (nnBroken) pct = Math.min(pct,70);
     return {pct,done,total:applicable.length,nnOk:!nnBroken,nnDone,nnTotal:nn.length};
   }, [nHabits, completions, dataStartDate]);
 
