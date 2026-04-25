@@ -1038,47 +1038,8 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         </div>
       </Card>
 
-      {/* Morning routine — informational only, never feeds score/analytics.
-          Shown when user has set a wake time AND the routine is active + has content. */}
-      {(() => {
-        const m = (persRoutines||{}).morning || {};
-        const show = m.active && (m.content||"").trim() && dayBody.wakeTime;
-        if (!show) return null;
-        const done = !!((persRoutines?.done?.morning)||{})[viewDay];
-        const toggleDone = () => setPersRoutines(prev => {
-          const cur = prev || {};
-          const d   = cur.done || {};
-          const md  = d.morning || {};
-          return {...cur, done: {...d, morning: {...md, [viewDay]: !done}}};
-        });
-        return (
-          <Card style={{padding:14,borderColor: done ? C.gold+"40" : C.border}}>
-            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-              <div style={{width:26,height:26,borderRadius:8,background:C.gold+"14",border:`1px solid ${C.gold}26`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <Icon name="sunrise" size={13} color={C.gold}/>
-              </div>
-              <div style={{fontSize:13,fontWeight:700,color:C.text,letterSpacing:-0.2}}>Morning Routine</div>
-            </div>
-            <div style={{fontSize:13,color:C.text2,lineHeight:1.55,whiteSpace:"pre-wrap",marginBottom:12}}>
-              {m.content}
-            </div>
-            <button
-              onClick={toggleDone}
-              style={{
-                width:"100%",padding:"10px 14px",borderRadius:10,fontFamily:FONT,
-                background: done ? C.gold+"18" : "transparent",
-                border: `1px solid ${done ? C.gold+"50" : C.border2}`,
-                color: done ? C.gold : C.text2,
-                fontSize:12,fontWeight:700,letterSpacing:0.4,cursor:"pointer",
-                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,
-                transition:"all .15s",
-              }}>
-              {done ? <Icon name="check" size={14}/> : <span style={{width:12,height:12,borderRadius:"50%",border:`1.5px solid currentColor`,display:"inline-block"}}/>}
-              {done ? "Validée" : "Valider"}
-            </button>
-          </Card>
-        );
-      })()}
+      {/* Morning/Evening routines render ONLY as popups (handleSetWake / handleSetBed
+          → routineModal). No inline section in Today, by design. */}
 
       {/* Score stats — hero metric cards */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -1218,48 +1179,7 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         );
       })}
 
-      {/* Evening routine — informational only. Shown when user has set a bedtime
-          AND the routine is active + has content. Validation here is local-only
-          and never reaches score(), analytics, or the heatmap. */}
-      {(() => {
-        const e = (persRoutines||{}).evening || {};
-        const show = e.active && (e.content||"").trim() && dayBody.bedTime;
-        if (!show) return null;
-        const done = !!((persRoutines?.done?.evening)||{})[viewDay];
-        const toggleDone = () => setPersRoutines(prev => {
-          const cur = prev || {};
-          const dn  = cur.done || {};
-          const ev  = dn.evening || {};
-          return {...cur, done: {...dn, evening: {...ev, [viewDay]: !done}}};
-        });
-        return (
-          <Card style={{padding:14,borderColor: done ? C.green+"40" : C.border}}>
-            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-              <div style={{width:26,height:26,borderRadius:8,background:C.green+"14",border:`1px solid ${C.green}26`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <Icon name="moon" size={13} color={C.green}/>
-              </div>
-              <div style={{fontSize:13,fontWeight:700,color:C.text,letterSpacing:-0.2}}>Evening Routine</div>
-            </div>
-            <div style={{fontSize:13,color:C.text2,lineHeight:1.55,whiteSpace:"pre-wrap",marginBottom:12}}>
-              {e.content}
-            </div>
-            <button
-              onClick={toggleDone}
-              style={{
-                width:"100%",padding:"10px 14px",borderRadius:10,fontFamily:FONT,
-                background: done ? C.green+"18" : "transparent",
-                border: `1px solid ${done ? C.green+"50" : C.border2}`,
-                color: done ? C.green : C.text2,
-                fontSize:12,fontWeight:700,letterSpacing:0.4,cursor:"pointer",
-                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,
-                transition:"all .15s",
-              }}>
-              {done ? <Icon name="check" size={14}/> : <span style={{width:12,height:12,borderRadius:"50%",border:`1.5px solid currentColor`,display:"inline-block"}}/>}
-              {done ? "Validée" : "Valider"}
-            </button>
-          </Card>
-        );
-      })()}
+      {/* (Evening routine inline section removed — popup only.) */}
 
       {isActive && (
         <button onClick={()=>setCloseModal(true)} style={{background:`linear-gradient(135deg, ${C.gold}, ${C.goldD})`,color:"#0a0a0a",border:"none",borderRadius:14,padding:"15px",fontSize:14,fontWeight:700,cursor:"pointer",width:"100%",marginTop:4,fontFamily:FONT,boxShadow:"0 8px 24px -10px rgba(245,192,86,0.35)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-0.2}}>
