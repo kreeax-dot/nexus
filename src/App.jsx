@@ -831,6 +831,8 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
   const [gratitude, setGratitude] = useState("");
   const [win, setWin] = useState("");
   const [collapsed, setCollapsed] = useState({});
+  // Routine popup — opened immediately after wake/bed time is set, every time.
+  const [routineModal, setRoutineModal] = useState(null); // null | "morning" | "evening"
 
   const dayBody = body[viewDay] || {};
   // Sleep on day N = bedTime stored on day N-1 (previous evening) + wakeTime on day N (this morning).
@@ -846,7 +848,16 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
   const workMin = workSess.filter(s=>s.date===viewDay).reduce((a,b)=>a+(b.duration||0),0);
   // Today bucket = explicit "add to today" (todayFor) OR naturally due (scheduledFor).
   // todayFor is set by the "Add to today" action and never mutates the due date.
-  const dayTasks = tasks.filter(t => t.todayFor === viewDay || t.scheduledFor === viewDay);
+  // Always sorted by IMPORTANCE: high → medium → low. Done tasks pushed to bottom.
+  const dayTasks = tasks
+    .filter(t => t.todayFor === viewDay || t.scheduledFor === viewDay)
+    .slice()
+    .sort((a, b) => {
+      if (!!a.done !== !!b.done) return a.done ? 1 : -1;
+      const oa = PRIORITY[normPrio(a.priority||a.urgency)].order;
+      const ob = PRIORITY[normPrio(b.priority||b.urgency)].order;
+      return oa - ob;
+    });
 
   const byCategory = habits.reduce((acc,h) => {
     if (!isApplicable(h, viewDay)) return acc;
@@ -869,6 +880,10 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
     [viewDay]: {...(prev[viewDay]||{}), ...patch}
   }));
 
+  // Routine popup eligibility — only fire when active && content is non-empty.
+  const morningEligible = !!(persRoutines?.morning?.active) && (persRoutines?.morning?.content||"").trim().length > 0;
+  const eveningEligible = !!(persRoutines?.evening?.active) && (persRoutines?.evening?.content||"").trim().length > 0;
+
   // Correct sleep model: sleep belongs to day N (wake day) and is derived from
   // body[N-1].bedTime + body[N].wakeTime. Bedtime set on day X affects day X+1's sleep.
   const handleSetWake = (v) => {
@@ -877,6 +892,8 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
       const cur = prev[viewDay] || {};
       return {...prev, [viewDay]: {...cur, wakeTime: v, sleep: sleep}};
     });
+    // Fire morning popup whenever a wake time is set/updated and the routine is eligible.
+    if (v && morningEligible) setRoutineModal("morning");
   };
   const handleSetBed = (v) => {
     const nextKey = addDays(viewDay, 1);
@@ -890,6 +907,8 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         [nextKey]: {...next, sleep: nextSleep},
       };
     });
+    // Fire evening popup whenever a bedtime is set/updated and the routine is eligible.
+    if (v && eveningEligible) setRoutineModal("evening");
   };
   const handleResetSleep = () => {
     const nextKey = addDays(viewDay, 1);
@@ -1262,6 +1281,60 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
           </div>
         </Modal>
       )}
+
+      {/* Routine popup — fired by handleSetWake / handleSetBed when the routine
+          is active and has content. "Valider" closes the modal AND records done
+          for viewDay. Any background tap also closes (without validating).
+          Validation is informational only — it never reaches score/analytics. */}
+      {routineModal && (() => {
+        const isMorning = routineModal === "morning";
+        const r = (persRoutines||{})[routineModal] || {};
+        const done = !!((persRoutines?.done?.[routineModal])||{})[viewDay];
+        const accent = isMorning ? C.gold : C.green;
+        const validate = () => {
+          setPersRoutines(prev => {
+            const cur = prev || {};
+            const dn  = cur.done || {};
+            const slot = dn[routineModal] || {};
+            return {...cur, done: {...dn, [routineModal]: {...slot, [viewDay]: true}}};
+          });
+          setRoutineModal(null);
+        };
+        return (
+          <Modal title={isMorning ? "Morning Routine" : "Evening Routine"} onClose={()=>setRoutineModal(null)}>
+            <div style={{display:"flex",flexDirection:"column",gap:16}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:34,height:34,borderRadius:10,background:accent+"14",border:`1px solid ${accent}30`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Icon name={isMorning?"sunrise":"moon"} size={17} color={accent}/>
+                </div>
+                <div style={{fontSize:12,color:C.text3,fontWeight:600,letterSpacing:0.4,textTransform:"uppercase"}}>
+                  {isMorning ? `Réveil · ${dayBody.wakeTime||""}` : `Coucher · ${dayBody.bedTime||""}`}
+                </div>
+              </div>
+              <div style={{
+                background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:12,padding:"14px 16px",
+                fontSize:14,lineHeight:1.6,color:C.text,whiteSpace:"pre-wrap",
+              }}>
+                {r.content}
+              </div>
+              <button
+                onClick={validate}
+                style={{
+                  width:"100%",padding:"14px",borderRadius:12,fontFamily:FONT,
+                  background: done ? accent+"22" : `linear-gradient(135deg, ${accent}, ${accent}dd)`,
+                  color: done ? accent : "#0a0a0a",
+                  border: done ? `1px solid ${accent}50` : "none",
+                  fontSize:14,fontWeight:700,letterSpacing:-0.2,cursor:"pointer",
+                  display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,
+                  boxShadow: done ? "none" : `0 8px 24px -10px ${accent}66`,
+                  transition:"all .15s",
+                }}>
+                <Icon name="check" size={15}/> {done ? "Déjà validée" : "Valider"}
+              </button>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
