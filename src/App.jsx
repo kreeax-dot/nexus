@@ -489,8 +489,14 @@ export default function App() {
   const [sportLog,    setSportLog,   sl_rdy] = useFS("sports",      []);
   const [goals,       setGoals,      g_rdy]  = useFS("goals",       []);
   const [activeDayKey,setActiveDayKey,adk_rdy]= useFS("activeDay",  todayStr());
+  // Personal morning/evening routines — purely informational, never feeds score/analytics.
+  const [persRoutines,setPersRoutines,prr_rdy]= useFS("personalRoutines", {
+    morning: {active:false, content:""},
+    evening: {active:false, content:""},
+    done:    {morning:{}, evening:{}},
+  });
 
-  const ready = h_rdy && c_rdy && t_rdy && pr_rdy && b_rdy && w_rdy && j_rdy && p_rdy && sl_rdy && g_rdy && adk_rdy;
+  const ready = h_rdy && c_rdy && t_rdy && pr_rdy && b_rdy && w_rdy && j_rdy && p_rdy && sl_rdy && g_rdy && adk_rdy && prr_rdy;
 
   const nHabits = useMemo(()=> (habits||[]).map(h => ({...h, cat: normCat(h.cat)})), [habits]);
 
@@ -587,6 +593,7 @@ export default function App() {
     sportLog, setSportLog, goals, setGoals,
     activeDayKey, setActiveDayKey, setTab,
     focusTimer,
+    persRoutines, setPersRoutines,
   };
 
   return (
@@ -816,7 +823,7 @@ export default function App() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // TODAY
 // ═══════════════════════════════════════════════════════════════════════════════
-function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,body,setBody,journal,setJournal,tasks,setTasks,workSess}) {
+function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,body,setBody,journal,setJournal,tasks,setTasks,workSess,persRoutines,setPersRoutines}) {
   const [viewDay, setViewDay] = useState(activeDayKey);
   useEffect(()=>{ setViewDay(activeDayKey); }, [activeDayKey]);
 
@@ -1012,6 +1019,48 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         </div>
       </Card>
 
+      {/* Morning routine — informational only, never feeds score/analytics.
+          Shown when user has set a wake time AND the routine is active + has content. */}
+      {(() => {
+        const m = (persRoutines||{}).morning || {};
+        const show = m.active && (m.content||"").trim() && dayBody.wakeTime;
+        if (!show) return null;
+        const done = !!((persRoutines?.done?.morning)||{})[viewDay];
+        const toggleDone = () => setPersRoutines(prev => {
+          const cur = prev || {};
+          const d   = cur.done || {};
+          const md  = d.morning || {};
+          return {...cur, done: {...d, morning: {...md, [viewDay]: !done}}};
+        });
+        return (
+          <Card style={{padding:14,borderColor: done ? C.gold+"40" : C.border}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+              <div style={{width:26,height:26,borderRadius:8,background:C.gold+"14",border:`1px solid ${C.gold}26`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Icon name="sunrise" size={13} color={C.gold}/>
+              </div>
+              <div style={{fontSize:13,fontWeight:700,color:C.text,letterSpacing:-0.2}}>Morning Routine</div>
+            </div>
+            <div style={{fontSize:13,color:C.text2,lineHeight:1.55,whiteSpace:"pre-wrap",marginBottom:12}}>
+              {m.content}
+            </div>
+            <button
+              onClick={toggleDone}
+              style={{
+                width:"100%",padding:"10px 14px",borderRadius:10,fontFamily:FONT,
+                background: done ? C.gold+"18" : "transparent",
+                border: `1px solid ${done ? C.gold+"50" : C.border2}`,
+                color: done ? C.gold : C.text2,
+                fontSize:12,fontWeight:700,letterSpacing:0.4,cursor:"pointer",
+                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,
+                transition:"all .15s",
+              }}>
+              {done ? <Icon name="check" size={14}/> : <span style={{width:12,height:12,borderRadius:"50%",border:`1.5px solid currentColor`,display:"inline-block"}}/>}
+              {done ? "Validée" : "Valider"}
+            </button>
+          </Card>
+        );
+      })()}
+
       {/* Score stats — hero metric cards */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Card glow={sc.nnOk} style={{padding:16,textAlign:"center",position:"relative",overflow:"hidden"}}>
@@ -1149,6 +1198,49 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
           </Card>
         );
       })}
+
+      {/* Evening routine — informational only. Shown when user has set a bedtime
+          AND the routine is active + has content. Validation here is local-only
+          and never reaches score(), analytics, or the heatmap. */}
+      {(() => {
+        const e = (persRoutines||{}).evening || {};
+        const show = e.active && (e.content||"").trim() && dayBody.bedTime;
+        if (!show) return null;
+        const done = !!((persRoutines?.done?.evening)||{})[viewDay];
+        const toggleDone = () => setPersRoutines(prev => {
+          const cur = prev || {};
+          const dn  = cur.done || {};
+          const ev  = dn.evening || {};
+          return {...cur, done: {...dn, evening: {...ev, [viewDay]: !done}}};
+        });
+        return (
+          <Card style={{padding:14,borderColor: done ? C.green+"40" : C.border}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+              <div style={{width:26,height:26,borderRadius:8,background:C.green+"14",border:`1px solid ${C.green}26`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Icon name="moon" size={13} color={C.green}/>
+              </div>
+              <div style={{fontSize:13,fontWeight:700,color:C.text,letterSpacing:-0.2}}>Evening Routine</div>
+            </div>
+            <div style={{fontSize:13,color:C.text2,lineHeight:1.55,whiteSpace:"pre-wrap",marginBottom:12}}>
+              {e.content}
+            </div>
+            <button
+              onClick={toggleDone}
+              style={{
+                width:"100%",padding:"10px 14px",borderRadius:10,fontFamily:FONT,
+                background: done ? C.green+"18" : "transparent",
+                border: `1px solid ${done ? C.green+"50" : C.border2}`,
+                color: done ? C.green : C.text2,
+                fontSize:12,fontWeight:700,letterSpacing:0.4,cursor:"pointer",
+                display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,
+                transition:"all .15s",
+              }}>
+              {done ? <Icon name="check" size={14}/> : <span style={{width:12,height:12,borderRadius:"50%",border:`1.5px solid currentColor`,display:"inline-block"}}/>}
+              {done ? "Validée" : "Valider"}
+            </button>
+          </Card>
+        );
+      })()}
 
       {isActive && (
         <button onClick={()=>setCloseModal(true)} style={{background:`linear-gradient(135deg, ${C.gold}, ${C.goldD})`,color:"#0a0a0a",border:"none",borderRadius:14,padding:"15px",fontSize:14,fontWeight:700,cursor:"pointer",width:"100%",marginTop:4,fontFamily:FONT,boxShadow:"0 8px 24px -10px rgba(245,192,86,0.35)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-0.2}}>
@@ -2557,7 +2649,72 @@ const BackBtn = ({back,title}) => (
   </div>
 );
 
-function RoutineSection({back, habits, setHabits}) {
+// Editor for the two personal routines (Morning + Evening). These never feed
+// the score/heatmap/analytics — they're purely user-facing reminders.
+function PersonalRoutinesEditor({persRoutines, setPersRoutines}) {
+  const update = (key, patch) => setPersRoutines(prev => ({
+    ...(prev||{}),
+    [key]: {...((prev||{})[key]||{}), ...patch},
+  }));
+  const sections = [
+    {key:"morning", title:"Morning Routine", icon:"sunrise", color:C.gold,
+     placeholder:"Tes invocations, intentions, rappels du matin…"},
+    {key:"evening", title:"Evening Routine", icon:"moon",    color:C.green,
+     placeholder:"Ce que tu veux faire avant de dormir…"},
+  ];
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {sections.map(s => {
+        const r = (persRoutines||{})[s.key] || {active:false, content:""};
+        const active = !!r.active;
+        return (
+          <Card key={s.key} style={{padding:14,opacity:active?1:0.85}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:active?10:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                <div style={{width:26,height:26,borderRadius:8,background:s.color+"14",border:`1px solid ${s.color}26`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Icon name={s.icon} size={13} color={s.color}/>
+                </div>
+                <div style={{fontSize:13,fontWeight:700,color:C.text,letterSpacing:-0.2}}>{s.title}</div>
+              </div>
+              <button
+                onClick={()=>update(s.key, {active:!active})}
+                title={active?"Désactiver":"Activer"}
+                aria-label={active?"Désactiver la routine":"Activer la routine"}
+                style={{
+                  position:"relative",width:34,height:20,borderRadius:999,
+                  background:active?s.color+"40":C.border2,
+                  border:`1px solid ${active?s.color+"66":C.border2}`,
+                  cursor:"pointer",transition:"all .2s",flexShrink:0,padding:0,
+                }}>
+                <span style={{
+                  position:"absolute",top:1,left:active?15:1,width:16,height:16,borderRadius:"50%",
+                  background:active?s.color:C.text4,
+                  transition:"left .2s, background .2s",
+                  boxShadow:active?`0 0 8px ${s.color}aa`:"none",
+                }}/>
+              </button>
+            </div>
+            {active && (
+              <textarea
+                value={r.content||""}
+                onChange={e=>update(s.key, {content:e.target.value})}
+                placeholder={s.placeholder}
+                rows={3}
+                style={{
+                  width:"100%",resize:"vertical",minHeight:72,
+                  background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:10,
+                  color:C.text,padding:"10px 12px",fontSize:13,outline:"none",
+                  fontFamily:FONT,lineHeight:1.5,boxSizing:"border-box",
+                }}/>
+            )}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function RoutineSection({back, habits, setHabits, persRoutines, setPersRoutines}) {
   const [form, setForm] = useState(null);
   const empty = {label:"",cat:"Discipline",freq:"daily",days:[],nn:false};
   const [d, setD] = useState(empty);
@@ -2616,6 +2773,9 @@ function RoutineSection({back, habits, setHabits}) {
         <BackBtn back={back} title="Routines"/>
         <Btn onClick={()=>{setD(empty);setForm("new");}}><Icon name="plus" size={14}/> Ajouter</Btn>
       </div>
+
+      {/* Personal morning/evening routines — informational only, no scoring impact. */}
+      <PersonalRoutinesEditor persRoutines={persRoutines} setPersRoutines={setPersRoutines}/>
 
       {Object.entries(grouped).map(([cat,hs])=>{
         const c = CATS[cat]||{color:C.text3,icon:"check"};
