@@ -1059,12 +1059,6 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         </Card>
       </div>
 
-      {!sc.nnOk && (
-        <div style={{background:"rgba(229,72,77,0.08)",border:`1px solid ${C.red}30`,borderRadius:12,padding:"10px 14px",fontSize:12,color:C.red,fontWeight:500,display:"flex",alignItems:"center",gap:8}}>
-          <Icon name="alert" size={14}/> Standard brisé — score plafonné à 70%
-        </div>
-      )}
-
       {workMin > 0 && (
         <Card style={{padding:12,textAlign:"center"}}>
           <div style={{fontSize:18,fontWeight:700,color:C.gold,letterSpacing:-0.4}}>{fmtMin(workMin)}</div>
@@ -2098,7 +2092,7 @@ function mockReply(msg, sc, bodyT, tasks, sportLog, habits) {
   const recentSport = (sportLog||[]).slice(0,3);
 
   if (/bonjour|salut|hello|hey|coucou/.test(m))
-    return `Salut. Score du jour : **${sc.pct}%** (${sc.done}/${sc.total}). ${sc.nnOk?"Les non-négos tiennent.":"⚠ Un non-négo est cassé — score plafonné à 70%."} Tu veux analyser ta journée ou ajouter une tâche ?`;
+    return `Salut. Score du jour : **${sc.pct}%** (${sc.done}/${sc.total}). ${sc.nnOk?"Les non-négos tiennent.":"⚠ Un non-négo est cassé."} Tu veux analyser ta journée ou ajouter une tâche ?`;
 
   if (/analyse|7 jours|semaine|7 derniers/.test(m))
     return `Analyse rapide :\n• Score du jour : **${sc.pct}%**\n• Non-négo : ${sc.nnDone}/${sc.nnTotal}\n• Sommeil : ${bodyT.sleep??"?"}h\n• Tâches actives : ${activeTasks.length} (dont ${urg.length} urgentes)\n• Sport récent : ${recentSport.length} séance${recentSport.length>1?"s":""}\n\n${sc.pct>=80?"Momentum solide — continue.":sc.pct>=60?"Correct. Verrouille les non-négos demain.":"Priorité : lock les non-négos avant tout le reste."}`;
@@ -2839,7 +2833,7 @@ function RoutineSection({back, habits, setHabits, persRoutines, setPersRoutines}
               <div style={{fontWeight:700,display:"inline-flex",alignItems:"center",gap:6}}>
                 {d.nn && <Icon name="check" size={12}/>}Non-négociable
               </div>
-              <div style={{fontSize:11,fontWeight:400,marginTop:3,opacity:0.85}}>Si ratée, score plafonné à 70%</div>
+              <div style={{fontSize:11,fontWeight:400,marginTop:3,opacity:0.85}}>Compte double dans le score</div>
             </button>
             <div style={{display:"flex",gap:10}}>
               <Btn onClick={()=>setForm(null)} variant="ghost" style={{flex:1}}>Annuler</Btn>
