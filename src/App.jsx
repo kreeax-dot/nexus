@@ -770,6 +770,15 @@ export default function App() {
           .sleep-reset-label{display:none}
         }
 
+        /* Heatmap — date on top, percentage below. Scale down on narrow screens. */
+        @media (max-width: 420px){
+          .hm-cell .hm-day{font-size:10px}
+          .hm-cell .hm-pct{font-size:8px;margin-top:0}
+        }
+        @media (max-width: 340px){
+          .hm-cell .hm-pct{display:none} /* fall back to date-only on the smallest screens */
+        }
+
         /* Animations */
         @keyframes b{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -1898,15 +1907,25 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
             // Before cutoff → pretend there's no data, no matter what was logged.
             const hasData = !beforeCutoff && ((completions[dk] && Object.values(completions[dk]).some(v=>v)) || body[dk]);
             const bg = (future || beforeCutoff) ? C.bg2 : heatColor(s.pct, hasData);
+            const txt = (future || beforeCutoff) ? C.text4 : heatTextColor(s.pct);
+            const dayNum = new Date(dk+"T12:00").getDate();
+            const showInner = !future && !beforeCutoff && hasData;
             return (
-              <div key={dk} title={`${fmtShort(dk)}: ${future?"—":beforeCutoff?"reset":s.pct+"%"}`} style={{
+              <div key={dk} title={`${fmtShort(dk)}: ${future?"—":beforeCutoff?"reset":hasData?s.pct+"%":"—"}`} className="hm-cell" style={{
                 aspectRatio:"1", borderRadius:6, background:bg,
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:10,fontWeight:700,
-                color: (future || beforeCutoff) ? C.text4 : heatTextColor(s.pct),
+                display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                color: txt,
                 border: today ? `2px solid ${C.gold}` : "none",
-                opacity: future?0.4:beforeCutoff?0.35:1
-              }}>{future||beforeCutoff?"":(hasData?new Date(dk+"T12:00").getDate():"")}</div>
+                opacity: future?0.4:beforeCutoff?0.35:1,
+                lineHeight:1, padding:"1px 2px", overflow:"hidden",
+              }}>
+                {showInner && (
+                  <>
+                    <span className="hm-day"   style={{fontSize:11,fontWeight:700,letterSpacing:-0.2}}>{dayNum}</span>
+                    <span className="hm-pct"   style={{fontSize:9, fontWeight:600,opacity:0.78,marginTop:1,letterSpacing:-0.1,fontVariantNumeric:"tabular-nums"}}>{s.pct}%</span>
+                  </>
+                )}
+              </div>
             );
           })}
         </div>
