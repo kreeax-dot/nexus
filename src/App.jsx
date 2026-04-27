@@ -549,23 +549,29 @@ export default function App() {
     return {rate, done, total:applicable, firstSeen:first};
   }, [completions]);
 
-  // Rate for an explicit date-range (any month or custom span).
-  // Only counts days where the habit existed (>= firstSeen).
+  // Rate over an explicit date-range. Denominator = every day in the range
+  // where the habit was ACTIVE (createdAt + activeRanges + frequency rule),
+  // NOT only days from first completion onward. A habit completed once in a
+  // 7-day active window is therefore 1/7 ≈ 14 %, not 100 %.
+  // Legacy habits with no createdAt are treated as having existed for the
+  // whole range (isApplicable returns true since the createdAt gate is
+  // skipped when the field is absent).
   const habitRateRange = useCallback((habit, dayKeys) => {
+    if (!dayKeys.length) return {rate:0,done:0,total:0,firstSeen:null};
     const id = habit.id;
+    // firstSeen is kept ONLY for the "depuis X" display — never used to clamp the denominator.
     const firstDates = Object.keys(completions).filter(dk => completions[dk]?.[id]).sort();
     const firstSeen = firstDates[0] || null;
-    if (!firstSeen || !dayKeys.length) return {rate:0,done:0,total:0,firstSeen};
     let applicable = 0, done = 0;
     for (const dk of dayKeys) {
-      if (dk < firstSeen) continue;
-      if (!isApplicable(habit, dk)) continue;
+      if (dataStartDate && dk < dataStartDate) continue; // respect analytics cutoff
+      if (!isApplicable(habit, dk)) continue;            // respects createdAt + activeRanges
       applicable++;
       if (completions[dk]?.[id]) done++;
     }
     const rate = applicable ? Math.round((done / applicable) * 100) : 0;
     return {rate, done, total:applicable, firstSeen};
-  }, [completions]);
+  }, [completions, dataStartDate]);
 
   const toggle = useCallback((id, dk) => {
     const k = dk || activeDayKey;
@@ -770,13 +776,15 @@ export default function App() {
           .sleep-reset-label{display:none}
         }
 
-        /* Heatmap — date on top, percentage below. Scale down on narrow screens. */
+        /* Heatmap — date on top, percentage below. Scale down on narrow screens
+           so the percentage is ALWAYS readable, never hidden. */
         @media (max-width: 420px){
-          .hm-cell .hm-day{font-size:10px}
-          .hm-cell .hm-pct{font-size:8px;margin-top:0}
+          .hm-cell .hm-day{font-size:11px}
+          .hm-cell .hm-pct{font-size:9px;margin-top:0}
         }
         @media (max-width: 340px){
-          .hm-cell .hm-pct{display:none} /* fall back to date-only on the smallest screens */
+          .hm-cell .hm-day{font-size:10px}
+          .hm-cell .hm-pct{font-size:8px}
         }
 
         /* Animations */
@@ -1689,9 +1697,11 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
   const diff = stats.avg - prevStats.avg;
 
   // ─── Habit rates for this period ────────────────────────────────
+  // Habits with `total > 0` (active at least one day this period) sort by rate
+  // descending; habits not active in this period sink to the bottom.
   const habitRates = useMemo(()=>
     habits.map(h => ({...h, ...habitRateRange(h, periodDays)}))
-          .sort((a,b) => (b.firstSeen?b.rate:-1) - (a.firstSeen?a.rate:-1))
+          .sort((a,b) => (b.total > 0 ? b.rate : -1) - (a.total > 0 ? a.rate : -1))
   , [habits, habitRateRange, periodDays]);
 
   const prevHabitRates = useMemo(()=>
@@ -1704,23 +1714,31 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
   const habitDeltas = useMemo(()=>{
     const prevById = new Map(prevHabitRates.map(h => [h.id, h]));
     return habitRates
-      .filter(h => h.firstSeen)
+      .filter(h => h.total > 0) // active at least once this period
       .map(h => {
         const p = prevById.get(h.id);
-        const prevRate = p?.firstSeen ? p.rate : null;
+        const prevRate = p && p.total > 0 ? p.rate : null;
         const delta = prevRate != null ? h.rate - prevRate : null;
         return {...h, prevRate, delta};
       });
   }, [habitRates, prevHabitRates]);
 
   // ─── Category averages for this period ──────────────────────────
+  // Weighted by importance: non-negotiables count double — keeps the same
+  // weighting model as score() so the two views agree.
+  const wAvg = (hs) => {
+    if (!hs.length) return 0;
+    const totalW = hs.reduce((a,h)=>a + (h.nn?2:1), 0);
+    const sumW   = hs.reduce((a,h)=>a + h.rate * (h.nn?2:1), 0);
+    return totalW ? Math.round(sumW / totalW) : 0;
+  };
   const catAvg = useMemo(()=> Object.keys(CATS).map(cat => {
-    const hs = habitRates.filter(h => h.cat === cat && h.firstSeen);
+    const hs = habitRates.filter(h => h.cat === cat && h.total > 0);
     return {
       cat,
-      avg: hs.length ? Math.round(hs.reduce((a,b)=>a+b.rate, 0) / hs.length) : 0,
+      avg:   wAvg(hs),
       color: CATS[cat].color,
-      icon: CATS[cat].icon,
+      icon:  CATS[cat].icon,
       count: hs.length,
     };
   }).filter(c => c.count > 0).sort((a,b)=>b.avg-a.avg), [habitRates]);
@@ -1728,16 +1746,18 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
   const prevCatAvg = useMemo(()=>{
     const map = {};
     Object.keys(CATS).forEach(cat => {
-      const hs = prevHabitRates.filter(h => h.cat === cat && h.firstSeen);
-      map[cat] = hs.length ? Math.round(hs.reduce((a,b)=>a+b.rate, 0) / hs.length) : 0;
+      const hs = prevHabitRates.filter(h => h.cat === cat && h.total > 0);
+      map[cat] = wAvg(hs);
     });
     return map;
   }, [prevHabitRates]);
 
   // ─── Improvement list: bottom 5, NN-weighted (NN habits surface ~20pts earlier) ──
+  // Includes habits at 0% as long as they were active ≥3 days — they're real
+  // poor performers, not "no data" cases.
   const improvementList = useMemo(()=>
     habitRates
-      .filter(h => h.firstSeen && h.total >= 3 && h.rate < 80)
+      .filter(h => h.total >= 3 && h.rate < 80)
       .map(h => ({...h, adjusted: h.rate - (h.nn ? 20 : 0)}))
       .sort((a,b) => a.adjusted - b.adjusted)
       .slice(0, 5)
@@ -1921,8 +1941,8 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
               }}>
                 {showInner && (
                   <>
-                    <span className="hm-day"   style={{fontSize:11,fontWeight:700,letterSpacing:-0.2}}>{dayNum}</span>
-                    <span className="hm-pct"   style={{fontSize:9, fontWeight:600,opacity:0.78,marginTop:1,letterSpacing:-0.1,fontVariantNumeric:"tabular-nums"}}>{s.pct}%</span>
+                    <span className="hm-day" style={{fontSize:12,fontWeight:700,letterSpacing:-0.2}}>{dayNum}</span>
+                    <span className="hm-pct" style={{fontSize:10,fontWeight:700,opacity:0.92,marginTop:1,letterSpacing:-0.1,fontVariantNumeric:"tabular-nums"}}>{s.pct}%</span>
                   </>
                 )}
               </div>
@@ -1938,20 +1958,25 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
         </div>
       </Card>
 
-      {/* KPI row (synced) */}
+      {/* KPI row (synced) — every value is real or shows "—" when no data exists. */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))",gap:8}}>
-        {[
-          {l:"Focus",      v:fmtMin(stats.workMin)||"0m",   c:C.gold,  icon:"clock"},
-          {l:"Énergie",    v:`${stats.avgEnergy}/10`,       c:C.gold,  icon:"activity"},
-          {l:"Sommeil",    v:`${stats.avgSleep}h`,          c:C.green, icon:"moon"},
-          {l:"Jours ≥90%", v:stats.perfectDays,             c:C.green, icon:"target"},
-        ].map(m=>(
-          <Card key={m.l} style={{padding:14,textAlign:"center"}}>
-            <Icon name={m.icon} size={14} color={m.c} style={{marginBottom:6}}/>
-            <div style={{fontSize:22,fontWeight:800,color:m.c,letterSpacing:-0.5}}>{m.v}</div>
-            <div style={{fontSize:10,fontWeight:600,color:C.text4,marginTop:2}}>{m.l}</div>
-          </Card>
-        ))}
+        {(() => {
+          const hasFocus  = stats.workMin > 0;
+          const hasEnergy = stats.avgEnergy !== "—";
+          const hasSleep  = stats.avgSleep  !== "—";
+          return [
+            {l:"Focus",            v: hasFocus  ? fmtMin(stats.workMin) : "—",       c:C.gold,  icon:"clock",    tip:"Total des sessions de focus enregistrées sur la période."},
+            {l:"Énergie moyenne",  v: hasEnergy ? `${stats.avgEnergy}/10` : "—",     c:C.gold,  icon:"activity", tip:"Moyenne de ton niveau d'énergie quotidien (échelle 0–10)."},
+            {l:"Sommeil moyen",    v: hasSleep  ? `${stats.avgSleep}h` : "—",        c:C.green, icon:"moon",     tip:"Moyenne des durées de sommeil enregistrées."},
+            {l:"Jours ≥ 90 %",     v: String(stats.perfectDays),                     c:C.green, icon:"target",   tip:"Nombre de jours où le score quotidien a atteint 90 % ou plus."},
+          ].map(m => (
+            <Card key={m.l} style={{padding:14,textAlign:"center"}} title={m.tip}>
+              <Icon name={m.icon} size={14} color={m.c} style={{marginBottom:6}}/>
+              <div style={{fontSize:22,fontWeight:800,color:m.v==="—"?C.text4:m.c,letterSpacing:-0.5}}>{m.v}</div>
+              <div style={{fontSize:10,fontWeight:600,color:C.text4,marginTop:2}}>{m.l}</div>
+            </Card>
+          ));
+        })()}
       </div>
 
       {/* Category breakdown (synced) */}
@@ -1988,24 +2013,31 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
             </FilterChip>
           ))}
         </div>
-        {filtered.map((h,i)=>(
-          <div key={h.id} style={{marginBottom:12,opacity:h.firstSeen?1:0.45}}>
-            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
-              <div style={{display:"flex",gap:8,alignItems:"center",flex:1,minWidth:0}}>
-                <span style={{color:C.text4,fontSize:11,width:18,flexShrink:0,fontWeight:500}}>{i+1}</span>
-                <span style={{fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.label}</span>
-                {h.nn&&<Badge color={C.red}>NN</Badge>}
+        {filtered.map((h,i)=>{
+          const wasActive = h.total > 0;
+          const rateColor = !wasActive ? C.text4 : h.rate>=80 ? C.green : h.rate>=50 ? C.gold : C.red;
+          return (
+            <div key={h.id} style={{marginBottom:12,opacity:wasActive?1:0.45}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",flex:1,minWidth:0}}>
+                  <span style={{color:C.text4,fontSize:11,width:18,flexShrink:0,fontWeight:500}}>{i+1}</span>
+                  <span style={{fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.label}</span>
+                  {h.nn&&<Badge color={C.red}>NN</Badge>}
+                </div>
+                <span style={{fontWeight:700,color:rateColor,marginLeft:8,letterSpacing:-0.2}}>
+                  {wasActive ? `${h.rate}%` : "—"}
+                </span>
               </div>
-              <span style={{fontWeight:700,color:!h.firstSeen?C.text4:h.rate>=80?C.green:h.rate>=50?C.gold:C.red,marginLeft:8,letterSpacing:-0.2}}>
-                {h.firstSeen ? `${h.rate}%` : "—"}
-              </span>
+              <PBar value={wasActive?h.rate:0} color={rateColor} h={4}/>
+              {wasActive && (
+                <div style={{fontSize:10,color:C.text4,marginTop:3,fontWeight:500}}>
+                  {h.done}/{h.total} jour{h.total>1?"s":""} actif{h.total>1?"s":""}
+                  {h.firstSeen && ` · 1ʳᵉ complétion ${fmtShort(h.firstSeen)}`}
+                </div>
+              )}
             </div>
-            <PBar value={h.firstSeen?h.rate:0} color={h.rate>=80?C.green:h.rate>=50?C.gold:C.red} h={4}/>
-            {h.firstSeen && (
-              <div style={{fontSize:10,color:C.text4,marginTop:3,fontWeight:500}}>{h.done}/{h.total} sur {periodDays.length}j · depuis {fmtShort(h.firstSeen)}</div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </Card>
 
       {/* Improvement list: NN-weighted bottom 5 (synced) */}
