@@ -463,6 +463,18 @@ function useFocusTimer(setWorkSess) {
 
   const updateMeta = (patch) => setState(s => ({...s, ...patch}));
 
+  // DECREASE-ONLY edit while running: reset elapsed to a smaller value (in seconds)
+  // by shifting startTs forward. Returns true if applied, false if rejected.
+  // Increasing elapsed is mathematically refused so the user cannot inflate data.
+  const adjustElapsed = (newSec) => {
+    if (!state.running || !state.startTs) return false;
+    const cur = Math.floor((Date.now() - state.startTs) / 1000);
+    const safe = Math.max(0, Math.floor(newSec));
+    if (safe > cur) return false; // refuse increases
+    setState(s => ({...s, startTs: Date.now() - safe * 1000}));
+    return true;
+  };
+
   // Auto-stop when a timed session reaches its target (checked on every tick).
   useEffect(() => {
     if (!state.running || !state.targetMin) return;
@@ -470,7 +482,7 @@ function useFocusTimer(setWorkSess) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsedSec, state.running, state.targetMin]);
 
-  return { state, elapsedSec, start, stop, updateMeta };
+  return { state, elapsedSec, start, stop, updateMeta, adjustElapsed };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -495,8 +507,10 @@ export default function App() {
     evening: {active:false, content:""},
     done:    {morning:{}, evening:{}},
   });
+  // Free-form notes / projects — a thinking space. Not tasks, not habits, never scored.
+  const [notes, setNotes, nt_rdy] = useFS("notes", []);
 
-  const ready = h_rdy && c_rdy && t_rdy && pr_rdy && b_rdy && w_rdy && j_rdy && p_rdy && sl_rdy && g_rdy && adk_rdy && prr_rdy;
+  const ready = h_rdy && c_rdy && t_rdy && pr_rdy && b_rdy && w_rdy && j_rdy && p_rdy && sl_rdy && g_rdy && adk_rdy && prr_rdy && nt_rdy;
 
   const nHabits = useMemo(()=> (habits||[]).map(h => ({...h, cat: normCat(h.cat)})), [habits]);
 
@@ -600,6 +614,7 @@ export default function App() {
     activeDayKey, setActiveDayKey, setTab,
     focusTimer,
     persRoutines, setPersRoutines,
+    notes, setNotes,
   };
 
   return (
@@ -1798,9 +1813,27 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
           <div>
             <div style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.8,marginBottom:4}}>SCORE MOYEN</div>
             <div style={{fontSize:54,fontWeight:800,color:stats.avg>=80?C.green:stats.avg>=60?C.gold:C.red,lineHeight:1,letterSpacing:-2}}>{stats.avg}%</div>
-            <div style={{fontSize:12,color:diff>=0?C.green:C.red,fontWeight:600,marginTop:6,display:"inline-flex",alignItems:"center",gap:4}}>
-              <Icon name={diff>=0?"trendUp":"trendDown"} size={12}/> {Math.abs(diff)}% vs {prevMonthName}
-            </div>
+            {/* Real month-over-month diff. If the previous month has zero tracking
+                data, the diff is meaningless → render an explicit "no comparison"
+                pill instead of a misleading delta. */}
+            {(() => {
+              const hasPrev = prevStats.scores.some(s => s.total > 0);
+              if (!hasPrev) {
+                return (
+                  <div style={{fontSize:11,color:C.text4,fontWeight:500,marginTop:6,letterSpacing:-0.1}}>
+                    Pas de données précédentes
+                  </div>
+                );
+              }
+              const sign = diff > 0 ? "+" : diff < 0 ? "−" : "±";
+              const col  = diff > 0 ? C.green : diff < 0 ? C.red : C.text3;
+              const icon = diff > 0 ? "trendUp" : diff < 0 ? "trendDown" : "bar";
+              return (
+                <div style={{fontSize:12,color:col,fontWeight:700,marginTop:6,display:"inline-flex",alignItems:"center",gap:4}}>
+                  <Icon name={icon} size={12}/> {sign}{Math.abs(diff)} pts vs {prevMonthName}
+                </div>
+              );
+            })()}
           </div>
           <div style={{textAlign:"right"}}>
             <div style={{fontSize:22,fontWeight:800,color:C.gold,letterSpacing:-0.5}}>{stats.perfectDays}</div>
@@ -2643,14 +2676,16 @@ function MeTab(props) {
   if (section === "focus") return <FocusSection back={()=>setSection("hub")} {...props}/>;
   if (section === "profile") return <ProfileSection back={()=>setSection("hub")} {...props}/>;
   if (section === "goals") return <GoalsSection back={()=>setSection("hub")} {...props}/>;
+  if (section === "notes") return <NotesSection back={()=>setSection("hub")} {...props}/>;
   return null;
 }
 
-function MeHub({setSection, habits, goals, profile, workSess}) {
+function MeHub({setSection, habits, goals, profile, workSess, notes}) {
   const focusMin = workSess.filter(s=>s.date===todayStr()).reduce((a,b)=>a+(b.duration||0),0);
   const cards = [
     {id:"routines", icon:"rotate",    title:"Routines",  sub:`${habits.length} habitudes · ${habits.filter(h=>h.nn).length} NN`, color:C.green},
     {id:"focus",    icon:"clock",     title:"Focus",     sub:`${fmtMin(focusMin)||"0m"} aujourd'hui`, color:C.gold},
+    {id:"notes",    icon:"book",      title:"Projets",   sub:`${(notes||[]).length} note${(notes||[]).length>1?"s":""} · espace libre`, color:C.green},
     {id:"profile",  icon:"user",      title:"Profil",    sub:profile.age?`${profile.age} ans · ${profile.weight||"?"}kg`:"À compléter", color:C.text2},
     {id:"goals",    icon:"target",    title:"Objectifs 2026", sub:`${goals.length} objectif${goals.length>1?"s":""} définis`, color:C.gold},
   ];
@@ -2897,15 +2932,18 @@ function RoutineSection({back, habits, setHabits, persRoutines, setPersRoutines}
   );
 }
 
-function FocusSection({back, workSess, tasks, activeDayKey, focusTimer}) {
+function FocusSection({back, workSess, setWorkSess, tasks, activeDayKey, focusTimer}) {
   // Timer state is global (lives at App root, persists to localStorage) — survives
   // tab navigation AND browser refresh. We only hold transient UI state here.
-  const { state: tState, elapsedSec: elapsed, start: tStart, stop: tStop, updateMeta } = focusTimer;
+  const { state: tState, elapsedSec: elapsed, start: tStart, stop: tStop, updateMeta, adjustElapsed } = focusTimer;
   const running   = tState.running;
   const targetMin = tState.targetMin || 0;
   const selTask   = tState.selTask || "";
   const focus     = tState.focus || "";
   const [custom,setCustom] = useState("");
+  // Edit dialogs for decrease-only correction of timer / saved sessions.
+  const [editLive,setEditLive] = useState(false);   // edit currently-running elapsed
+  const [editSess,setEditSess] = useState(null);    // edit a saved session row { id, duration }
 
   const fmt = s=>`${String(Math.floor(s/3600)).padStart(2,"0")}:${String(Math.floor((s%3600)/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
   const todayMin = workSess.filter(s=>s.date===activeDayKey).reduce((a,b)=>a+(b.duration||0),0);
@@ -2926,8 +2964,11 @@ function FocusSection({back, workSess, tasks, activeDayKey, focusTimer}) {
       </div>
       <Card glow>
         {targetMin>0 && <div style={{marginBottom:12}}><PBar value={pct} color={C.gold} h={6}/><div style={{fontSize:10,color:C.text3,textAlign:"right",marginTop:3}}>{Math.round(pct)}% · {fmtMin(Math.max(0,targetMin-Math.floor(elapsed/60)))} restant</div></div>}
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
           <div style={{fontSize:40,fontWeight:800,fontVariantNumeric:"tabular-nums",flex:1,color:running?C.gold:C.text,letterSpacing:-1.5}}>{fmt(elapsed)}</div>
+          {running && elapsed > 0 && (
+            <IconBtn name="edit" onClick={()=>setEditLive(true)} title="Corriger le temps (réduction uniquement)"/>
+          )}
           {running ? <Btn onClick={()=>stop()} variant="danger" style={{padding:"10px 18px"}}><Icon name="stop" size={14}/> Stop</Btn>
                    : <Btn onClick={()=>start()} style={{padding:"10px 18px"}}><Icon name="play" size={14}/> Start</Btn>}
         </div>
@@ -2963,14 +3004,97 @@ function FocusSection({back, workSess, tasks, activeDayKey, focusTimer}) {
         <Card>
           <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:10}}>SESSIONS DU JOUR</div>
           {workSess.filter(s=>s.date===activeDayKey).map(s=>(
-            <div key={s.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:13}}>
-              <div><div style={{fontWeight:500}}>{s.task||s.focus||"Session libre"}</div>{s.focus&&s.task&&<div style={{fontSize:11,color:C.text3}}>{s.focus}</div>}</div>
+            <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:13,gap:8}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.task||s.focus||"Session libre"}</div>
+                {s.focus&&s.task&&<div style={{fontSize:11,color:C.text3}}>{s.focus}</div>}
+              </div>
               <span style={{color:C.gold,fontWeight:700}}>{fmtMin(s.duration)}</span>
+              <IconBtn name="edit" onClick={()=>setEditSess({id:s.id, duration:s.duration||0})} title="Corriger (réduction uniquement)"/>
             </div>
           ))}
         </Card>
       )}
+
+      {/* Edit running elapsed — DECREASE ONLY. */}
+      {editLive && (
+        <DecreaseDurationModal
+          title="Corriger le temps"
+          captionHint="Tu ne peux que réduire — pour éviter toute inflation des données."
+          current={elapsed}
+          unit="seconds"
+          onClose={()=>setEditLive(false)}
+          onSubmit={(secs)=>{
+            const ok = adjustElapsed(secs);
+            if (ok) setEditLive(false);
+            return ok;
+          }}/>
+      )}
+
+      {/* Edit saved session — DECREASE ONLY. */}
+      {editSess && (
+        <DecreaseDurationModal
+          title="Corriger la session"
+          captionHint="La durée ne peut être que réduite."
+          current={editSess.duration}
+          unit="minutes"
+          onClose={()=>setEditSess(null)}
+          onSubmit={(mins)=>{
+            if (mins > editSess.duration) return false;
+            setWorkSess(prev => (prev||[]).map(x => x.id === editSess.id ? {...x, duration: mins} : x));
+            setEditSess(null);
+            return true;
+          }}/>
+      )}
     </div>
+  );
+}
+
+// Reusable decrease-only duration editor. Refuses any value > current.
+// `unit` switches the input granularity: seconds (live timer) or minutes (saved session).
+function DecreaseDurationModal({title, captionHint, current, unit, onClose, onSubmit}) {
+  const isSec = unit === "seconds";
+  const initMins = isSec ? Math.floor(current / 60) : current;
+  const initSecs = isSec ? current % 60 : 0;
+  const [mins, setMins] = useState(String(initMins));
+  const [secs, setSecs] = useState(String(initSecs));
+  const [err, setErr]   = useState("");
+
+  const submit = () => {
+    const m = Math.max(0, parseInt(mins, 10) || 0);
+    const s = isSec ? Math.max(0, parseInt(secs, 10) || 0) : 0;
+    const total = isSec ? (m * 60 + s) : m;
+    if (total > current) {
+      setErr("Valeur supérieure au temps actuel — augmentation interdite.");
+      return;
+    }
+    setErr("");
+    const ok = onSubmit(total);
+    if (!ok) setErr("Refusé — la durée ne peut qu'être réduite.");
+  };
+
+  const fmtCur = isSec
+    ? `${String(Math.floor(current/3600)).padStart(2,"0")}:${String(Math.floor((current%3600)/60)).padStart(2,"0")}:${String(current%60).padStart(2,"0")}`
+    : fmtMin(current) || "0m";
+
+  return (
+    <Modal title={title} onClose={onClose}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{background:C.bg2,borderRadius:10,padding:"10px 14px",fontSize:12,color:C.text3,lineHeight:1.5}}>
+          <span style={{color:C.gold,fontWeight:600}}>Actuel · {fmtCur}</span>
+          <div style={{marginTop:4}}>{captionHint}</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns: isSec ? "1fr 1fr" : "1fr", gap:10}}>
+          <FInput label={isSec?"MINUTES":"DURÉE (MINUTES)"} type="number" value={mins} onChange={e=>setMins(e.target.value)} placeholder="0"/>
+          {isSec && <FInput label="SECONDES" type="number" value={secs} onChange={e=>setSecs(e.target.value)} placeholder="0"/>}
+        </div>
+        {err && <div style={{fontSize:11,color:C.red,fontWeight:600}}><Icon name="alert" size={11}/> {err}</div>}
+        <div style={{display:"flex",gap:10}}>
+          <Btn onClick={onClose} variant="ghost" style={{flex:1}}>Annuler</Btn>
+          <Btn onClick={submit} style={{flex:2}}>Appliquer</Btn>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -2994,6 +3118,143 @@ function ProfileSection({back, profile, setProfile}) {
         <Icon name="sparkles" size={14} color={C.green} style={{flexShrink:0,marginTop:2}}/>
         <div>Ces données personnalisent les conseils de Growth Agent en temps réel — il les utilise dans chaque réponse.</div>
       </Card>
+    </div>
+  );
+}
+
+// Free-form thinking space. NOT tasks, NOT habits — pure brainstorming
+// area with auto-save. Each note has a title, optional description, and a
+// multi-line body. Edits write straight back to useFS (Firestore) so the
+// "save" is implicit and instant.
+function NotesSection({back, notes, setNotes}) {
+  const list = Array.isArray(notes) ? notes : [];
+  const [openId, setOpenId] = useState(null);
+  const open = openId ? list.find(n => n.id === openId) : null;
+
+  const create = () => {
+    const id = "n" + Date.now();
+    const stamp = new Date().toISOString();
+    setNotes(prev => [...(prev||[]), {id, title:"Nouvelle note", description:"", body:"", createdAt:stamp, updatedAt:stamp}]);
+    setOpenId(id);
+  };
+  const patch = (id, p) => setNotes(prev => (prev||[]).map(n =>
+    n.id === id ? {...n, ...p, updatedAt: new Date().toISOString()} : n
+  ));
+  const remove = (id) => {
+    setNotes(prev => (prev||[]).filter(n => n.id !== id));
+    if (openId === id) setOpenId(null);
+  };
+
+  // ───── Editor view ────────────────────────────────────────────────────
+  if (open) {
+    return (
+      <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+          <BackBtn back={()=>setOpenId(null)} title="Projet"/>
+          <IconBtn name="trash" onClick={()=>{ if(confirm("Supprimer cette note ?")) remove(open.id); }} title="Supprimer"/>
+        </div>
+        <Card>
+          <input
+            value={open.title}
+            onChange={e=>patch(open.id, {title:e.target.value})}
+            placeholder="Titre du projet"
+            style={{
+              width:"100%",background:"transparent",border:"none",outline:"none",
+              fontFamily:FONT,color:C.text,fontSize:22,fontWeight:700,letterSpacing:-0.5,
+              marginBottom:8,padding:0,
+            }}/>
+          <input
+            value={open.description||""}
+            onChange={e=>patch(open.id, {description:e.target.value})}
+            placeholder="Description courte (optionnel)"
+            style={{
+              width:"100%",background:"transparent",border:"none",outline:"none",
+              fontFamily:FONT,color:C.text3,fontSize:13,padding:0,marginBottom:14,
+            }}/>
+          <textarea
+            value={open.body||""}
+            onChange={e=>patch(open.id, {body:e.target.value})}
+            placeholder="Écris librement — idées, plans, brainstorming…"
+            rows={14}
+            style={{
+              width:"100%",resize:"vertical",minHeight:280,
+              background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:12,
+              color:C.text,padding:"14px 16px",fontSize:14,outline:"none",
+              fontFamily:FONT,lineHeight:1.65,boxSizing:"border-box",
+            }}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,gap:8,fontSize:10,color:C.text4,fontWeight:500}}>
+            <span style={{display:"inline-flex",alignItems:"center",gap:5}}>
+              <Icon name="check" size={11} color={C.green}/> Sauvegarde automatique
+            </span>
+            <span>
+              Modifié · {new Date(open.updatedAt||open.createdAt).toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}
+            </span>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // ───── List view ──────────────────────────────────────────────────────
+  // Sorted by most-recently-updated first.
+  const sorted = list.slice().sort((a,b) =>
+    String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||""))
+  );
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <BackBtn back={back} title="Projets"/>
+        <Btn onClick={create}><Icon name="plus" size={14}/> Nouveau</Btn>
+      </div>
+
+      <Card style={{background:C.green+"0a",border:`1px solid ${C.green}25`,fontSize:12,color:C.text2,lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:10}}>
+        <Icon name="sparkles" size={14} color={C.green} style={{flexShrink:0,marginTop:2}}/>
+        <div>Un espace libre pour penser, écrire, organiser tes idées. Pas de tâches, pas d'habitudes — juste tes pensées.</div>
+      </Card>
+
+      {sorted.length === 0 ? (
+        <Card style={{padding:32,textAlign:"center"}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:48,height:48,borderRadius:14,background:C.green+"14",border:`1px solid ${C.green}25`,marginBottom:14}}>
+            <Icon name="book" size={20} color={C.green}/>
+          </div>
+          <div style={{fontWeight:700,fontSize:15,letterSpacing:-0.3,marginBottom:6}}>Aucun projet</div>
+          <div style={{fontSize:12,color:C.text3,marginBottom:16}}>Crée ton premier espace de réflexion.</div>
+          <Btn onClick={create}><Icon name="plus" size={14}/> Créer une note</Btn>
+        </Card>
+      ) : (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {sorted.map(n => {
+            const updated = n.updatedAt || n.createdAt;
+            const preview = (n.body||"").trim().replace(/\s+/g," ").slice(0,140);
+            return (
+              <button key={n.id} onClick={()=>setOpenId(n.id)} style={{
+                background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14,
+                textAlign:"left",cursor:"pointer",color:C.text,fontFamily:FONT,
+                backdropFilter:"blur(14px)",WebkitBackdropFilter:"blur(14px)",
+                transition:"transform .15s, border-color .2s, box-shadow .2s",
+              }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=C.green+"40";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="";}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:6}}>
+                  <div style={{fontSize:15,fontWeight:700,letterSpacing:-0.3,minWidth:0,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {n.title || "Sans titre"}
+                  </div>
+                  <span style={{fontSize:10,color:C.text4,fontWeight:500,flexShrink:0,whiteSpace:"nowrap"}}>
+                    {updated ? new Date(updated).toLocaleDateString("fr-FR",{day:"numeric",month:"short"}) : ""}
+                  </span>
+                </div>
+                {n.description && (
+                  <div style={{fontSize:12,color:C.text3,marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n.description}</div>
+                )}
+                {preview && (
+                  <div style={{fontSize:12,color:C.text4,lineHeight:1.5,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{preview}</div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
