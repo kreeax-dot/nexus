@@ -865,6 +865,10 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
   const [collapsed, setCollapsed] = useState({});
   // Routine popup — opened immediately after wake/bed time is set, every time.
   const [routineModal, setRoutineModal] = useState(null); // null | "morning" | "evening"
+  // ─── PREVIEW MODE state — defined here, derived values built below once
+  // `todayComp` and `sc` are in scope. NEVER writes to real completions.
+  const [preview, setPreview] = useState(false);
+  const [previewOverrides, setPreviewOverrides] = useState({}); // {habitId: bool}
 
   const dayBody = body[viewDay] || {};
   // Sleep on day N = bedTime stored on day N-1 (previous evening) + wakeTime on day N (this morning).
@@ -878,6 +882,43 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
   const todayComp = completions[viewDay] || {};
   const sc = score(viewDay);
   const workMin = workSess.filter(s=>s.date===viewDay).reduce((a,b)=>a+(b.duration||0),0);
+
+  // ─── Preview mode wiring (depends on todayComp + sc) ──────────────────────
+  // Preview lets the user simulate the day's end-of-day score without ever
+  // writing to `completions`. Toggling exits/restores the real state instantly.
+  const togglePreviewMode = () => {
+    setPreview(p => !p);
+    setPreviewOverrides({});
+  };
+  const togglePreviewHabit = (id) => {
+    setPreviewOverrides(prev => {
+      const realVal    = !!todayComp[id];
+      const currentEff = id in prev ? prev[id] : realVal;
+      const nextEff    = !currentEff;
+      if (nextEff === realVal) {
+        const cp = {...prev}; delete cp[id]; return cp;
+      }
+      return {...prev, [id]: nextEff};
+    });
+  };
+  // In normal mode this points at `todayComp` (no copy). In preview it overlays
+  // overrides on top — used by the UI for checkboxes and the simulated score.
+  const effectiveComp = preview ? {...todayComp, ...previewOverrides} : todayComp;
+  // Score reflecting the on-screen state — real `sc` if not in preview.
+  const liveSc = (() => {
+    if (!preview) return sc;
+    const applicable = habits.filter(h => isApplicable(h, viewDay));
+    if (!applicable.length) return {pct:0,done:0,total:0,nnOk:true,nnDone:0,nnTotal:0};
+    const weightOf = h => h.nn ? 2 : 1;
+    const totalW = applicable.reduce((s,h) => s + weightOf(h), 0);
+    const doneW  = applicable.reduce((s,h) => s + (effectiveComp[h.id] ? weightOf(h) : 0), 0);
+    const pct = totalW ? Math.round((doneW / totalW) * 100) : 0;
+    const done = applicable.filter(h => effectiveComp[h.id]).length;
+    const nn = applicable.filter(h => h.nn);
+    const nnDone = nn.filter(h => effectiveComp[h.id]).length;
+    const nnBroken = nn.length > 0 && nnDone < nn.length;
+    return {pct,done,total:applicable.length,nnOk:!nnBroken,nnDone,nnTotal:nn.length};
+  })();
   // Today bucket = explicit "add to today" (todayFor) OR naturally due (scheduledFor).
   // todayFor is set by the "Add to today" action and never mutates the due date.
   // Always sorted by IMPORTANCE: high → medium → low. Done tasks pushed to bottom.
@@ -971,7 +1012,7 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
-      {/* Date nav */}
+      {/* Date nav + Preview toggle */}
       <Card style={{padding:"14px 16px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
           <button onClick={()=>setViewDay(addDays(viewDay,-1))} style={navArrow}><Icon name="chevL" size={18}/></button>
@@ -981,14 +1022,48 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
           </div>
           <button onClick={()=>setViewDay(addDays(viewDay,1))} style={{...navArrow,opacity:isFuture?0.4:1}} disabled={isFuture}><Icon name="chevR" size={18}/></button>
         </div>
-        {!isActive && (
-          <div style={{display:"flex",justifyContent:"center",marginTop:10}}>
+        <div style={{display:"flex",justifyContent:"center",gap:8,marginTop:10,flexWrap:"wrap"}}>
+          {!isActive && (
             <Btn onClick={()=>setViewDay(activeDayKey)} variant="outline" style={{padding:"6px 12px",fontSize:12}}>
               <Icon name="rotate" size={14}/> Revenir au jour actif
             </Btn>
-          </div>
-        )}
+          )}
+          {/* Preview toggle — simulates end-of-day score without saving anything. */}
+          <button
+            onClick={togglePreviewMode}
+            title={preview ? "Quitter l'aperçu" : "Simuler le score sans rien enregistrer"}
+            style={{
+              display:"inline-flex",alignItems:"center",gap:6,
+              padding:"6px 12px",borderRadius:999,
+              border:`1px solid ${preview?C.gold:C.border2}`,
+              background: preview ? C.gold+"18" : "transparent",
+              color: preview ? C.gold : C.text3,
+              fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:FONT,
+              transition:"all .15s",
+            }}>
+            <Icon name={preview?"x":"sparkles"} size={13}/> {preview ? "Quitter l'aperçu" : "Aperçu"}
+          </button>
+        </div>
       </Card>
+
+      {/* Preview banner — distinct visual cue that current values are simulated. */}
+      {preview && (
+        <div style={{
+          background:`linear-gradient(135deg, ${C.gold}18, ${C.gold}08)`,
+          border:`1px solid ${C.gold}40`,
+          borderRadius:12,padding:"10px 14px",
+          display:"flex",alignItems:"center",gap:10,
+          fontSize:12,color:C.gold,fontWeight:600,
+        }}>
+          <Icon name="sparkles" size={14}/>
+          <div style={{flex:1,lineHeight:1.4}}>
+            <div style={{fontWeight:700,letterSpacing:0.2,textTransform:"uppercase",fontSize:10}}>Mode aperçu</div>
+            <div style={{color:C.text2,fontWeight:500,fontSize:11,marginTop:2}}>
+              Coche/décoche pour simuler — aucune donnée n'est sauvegardée.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sleep — Réveil left / Coucher right, stable 2-col grid, Durée row below.
           Sleep = previous day's bedtime + this day's wakeup. */}
@@ -1073,19 +1148,23 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
       {/* Morning/Evening routines render ONLY as popups (handleSetWake / handleSetBed
           → routineModal). No inline section in Today, by design. */}
 
-      {/* Score stats — hero metric cards */}
+      {/* Score stats — hero metric cards. In preview mode these reflect liveSc
+          (simulated), not the persisted score. A small "Aperçu" tag identifies
+          the simulated values so the user is never confused. */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-        <Card glow={sc.nnOk} style={{padding:16,textAlign:"center",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",inset:0,background:sc.nnOk?`radial-gradient(circle at 50% 120%, ${C.green}1c, transparent 60%)`:`radial-gradient(circle at 50% 120%, ${C.red}22, transparent 60%)`,pointerEvents:"none"}}/>
+        <Card glow={liveSc.nnOk} style={{padding:16,textAlign:"center",position:"relative",overflow:"hidden",border:preview?`1px dashed ${C.gold}55`:undefined}}>
+          <div style={{position:"absolute",inset:0,background:liveSc.nnOk?`radial-gradient(circle at 50% 120%, ${C.green}1c, transparent 60%)`:`radial-gradient(circle at 50% 120%, ${C.red}22, transparent 60%)`,pointerEvents:"none"}}/>
           <div style={{position:"relative"}}>
-            <div style={{fontSize:34,fontWeight:800,color:sc.nnOk?C.green:C.red,lineHeight:1,letterSpacing:-1.2,textShadow:sc.nnOk?`0 0 22px ${C.green}55`:"none"}}>{sc.pct}<span style={{fontSize:20,fontWeight:700,opacity:.6}}>%</span></div>
-            <div style={{fontSize:10,color:C.text3,fontWeight:700,letterSpacing:0.8,marginTop:8,textTransform:"uppercase"}}>Score · {sc.done}/{sc.total}</div>
+            {preview && <div style={{fontSize:9,color:C.gold,fontWeight:700,letterSpacing:0.6,marginBottom:4,textTransform:"uppercase"}}>Aperçu</div>}
+            <div style={{fontSize:34,fontWeight:800,color:liveSc.nnOk?C.green:C.red,lineHeight:1,letterSpacing:-1.2,textShadow:liveSc.nnOk?`0 0 22px ${C.green}55`:"none"}}>{liveSc.pct}<span style={{fontSize:20,fontWeight:700,opacity:.6}}>%</span></div>
+            <div style={{fontSize:10,color:C.text3,fontWeight:700,letterSpacing:0.8,marginTop:8,textTransform:"uppercase"}}>Score · {liveSc.done}/{liveSc.total}</div>
           </div>
         </Card>
-        <Card style={{padding:16,textAlign:"center",border:`1px solid ${sc.nnOk?C.border:C.red+"40"}`,position:"relative",overflow:"hidden"}}>
-          {!sc.nnOk && <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 120%, ${C.red}22, transparent 60%)`,pointerEvents:"none"}}/>}
+        <Card style={{padding:16,textAlign:"center",border:`1px ${preview?"dashed":"solid"} ${preview?C.gold+"55":(liveSc.nnOk?C.border:C.red+"40")}`,position:"relative",overflow:"hidden"}}>
+          {!liveSc.nnOk && <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 120%, ${C.red}22, transparent 60%)`,pointerEvents:"none"}}/>}
           <div style={{position:"relative"}}>
-            <div style={{fontSize:34,fontWeight:800,color:sc.nnOk?C.gold:C.red,lineHeight:1,letterSpacing:-1.2}}>{sc.nnDone}<span style={{opacity:.35,fontWeight:700}}>/{sc.nnTotal}</span></div>
+            {preview && <div style={{fontSize:9,color:C.gold,fontWeight:700,letterSpacing:0.6,marginBottom:4,textTransform:"uppercase"}}>Aperçu</div>}
+            <div style={{fontSize:34,fontWeight:800,color:liveSc.nnOk?C.gold:C.red,lineHeight:1,letterSpacing:-1.2}}>{liveSc.nnDone}<span style={{opacity:.35,fontWeight:700}}>/{liveSc.nnTotal}</span></div>
             <div style={{fontSize:10,color:C.text3,fontWeight:700,letterSpacing:0.8,marginTop:8,textTransform:"uppercase"}}>Non-négociables</div>
           </div>
         </Card>
@@ -1145,10 +1224,12 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
         </Card>
       )}
 
-      {/* Habit categories — premium collapsible sections */}
+      {/* Habit categories — premium collapsible sections. In preview mode the
+          checkboxes use effectiveComp (overlay) and clicks route to
+          togglePreviewHabit so they never touch the persisted completions. */}
       {Object.entries(byCategory).map(([cat,hs])=>{
         const c = CATS[cat]||{color:C.text3,icon:"check"};
-        const doneCount = hs.filter(h=>todayComp[h.id]).length;
+        const doneCount = hs.filter(h=>effectiveComp[h.id]).length;
         const isCollapsed = !!collapsed[cat];
         const pct = hs.length ? Math.round((doneCount/hs.length)*100) : 0;
         return (
@@ -1174,17 +1255,22 @@ function TodayTab({habits,completions,toggle,activeDayKey,setActiveDayKey,score,
             {!isCollapsed && (
               <div style={{display:"flex",flexDirection:"column",gap:7,animation:"fadeIn .25s cubic-bezier(.2,.8,.2,1)"}}>
                 {hs.map(h=>{
-                  const checked = !!todayComp[h.id];
+                  const checked = !!effectiveComp[h.id];
+                  // Dashed border in preview = visual cue that this state is
+                  // simulated and won't be persisted.
                   return (
-                    <button key={h.id} onClick={()=>toggle(h.id, viewDay)} style={{
-                      display:"flex",alignItems:"center",gap:12,padding:"12px 13px",
-                      background: checked?c.color+"14":C.card2,
-                      border:`1px solid ${checked?c.color+"40":C.border}`,
-                      borderRadius:12,cursor:"pointer",color:C.text,
-                      transition:"background .2s, border-color .2s, transform .12s",
-                      textAlign:"left",fontFamily:FONT,
-                      boxShadow: checked ? `0 0 0 3px ${c.color}10` : "none",
-                    }}>
+                    <button
+                      key={h.id}
+                      onClick={()=> preview ? togglePreviewHabit(h.id) : toggle(h.id, viewDay)}
+                      style={{
+                        display:"flex",alignItems:"center",gap:12,padding:"12px 13px",
+                        background: checked?c.color+"14":C.card2,
+                        border:`1px ${preview?"dashed":"solid"} ${checked?c.color+"40":C.border}`,
+                        borderRadius:12,cursor:"pointer",color:C.text,
+                        transition:"background .2s, border-color .2s, transform .12s",
+                        textAlign:"left",fontFamily:FONT,
+                        boxShadow: checked ? `0 0 0 3px ${c.color}10` : "none",
+                      }}>
                       <div style={{
                         width:20,height:20,borderRadius:6,
                         border:`1.5px solid ${checked?c.color:C.border2}`,
@@ -1813,11 +1899,19 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
           <div>
             <div style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.8,marginBottom:4}}>SCORE MOYEN</div>
             <div style={{fontSize:54,fontWeight:800,color:stats.avg>=80?C.green:stats.avg>=60?C.gold:C.red,lineHeight:1,letterSpacing:-2}}>{stats.avg}%</div>
-            {/* Real month-over-month diff. If the previous month has zero tracking
-                data, the diff is meaningless → render an explicit "no comparison"
-                pill instead of a misleading delta. */}
+            {/* Real month-over-month diff. "Pas de données précédentes" appears
+                ONLY when the user logged nothing in the previous month — i.e. no
+                habit completion AND no body entry on any prev-period day. As soon
+                as any tracking activity exists, we render the signed delta. */}
             {(() => {
-              const hasPrev = prevStats.scores.some(s => s.total > 0);
+              const cutoff = profile?.dataStartDate || "";
+              const hasPrev = prevPeriodDays.some(dk => {
+                if (cutoff && dk < cutoff) return false;
+                const comp = completions[dk];
+                if (comp && Object.values(comp).some(v => v)) return true;
+                if (body[dk]) return true;
+                return false;
+              });
               if (!hasPrev) {
                 return (
                   <div style={{fontSize:11,color:C.text4,fontWeight:500,marginTop:6,letterSpacing:-0.1}}>
@@ -1830,7 +1924,7 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
               const icon = diff > 0 ? "trendUp" : diff < 0 ? "trendDown" : "bar";
               return (
                 <div style={{fontSize:12,color:col,fontWeight:700,marginTop:6,display:"inline-flex",alignItems:"center",gap:4}}>
-                  <Icon name={icon} size={12}/> {sign}{Math.abs(diff)} pts vs {prevMonthName}
+                  <Icon name={icon} size={12}/> {sign}{Math.abs(diff)}% vs {prevMonthName}
                 </div>
               );
             })()}
