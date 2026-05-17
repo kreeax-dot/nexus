@@ -166,22 +166,29 @@ const monthRange = (year, month) => {
   const days = new Date(year, month+1, 0).getDate();
   return Array.from({length:days},(_,i)=>`${year}-${String(month+1).padStart(2,"0")}-${String(i+1).padStart(2,"0")}`);
 };
-// A habit is applicable on day `dk` iff:
-//   • the day-of-week matches its frequency rule, AND
-//   • dk >= its creation date (no backdating of newly added habits), AND
-//   • dk falls inside one of its active ranges (if any — supports pause/resume).
-// Habits without `createdAt` (seeded defaults / legacy) are treated as always existent.
-// Habits without `activeRanges` are treated as always active since creation.
+// Habit lifecycle model — visibility rule for ANY day `dk`:
+//   • freq + day-of-week must match
+//   • dk >= createdAt (when set) — newly-added habits never appear in the past
+//   • If activeRanges exist (cycle of deactivate/reactivate), dk must fall
+//     in one of them. Otherwise we fall back to:
+//   • dk <= deactivatedAt (when set) — habit visible up to and including the
+//     last active day; days AFTER deactivation are hidden.
+// Legacy habits (no createdAt, no activeRanges, no deactivatedAt) remain
+// universally visible. Past days are NEVER mutated by these checks — they
+// always evaluate against the same stored history.
 const isActiveOn = (h, dk) => {
-  if (!h.activeRanges || !Array.isArray(h.activeRanges) || h.activeRanges.length === 0) return true;
-  return h.activeRanges.some(r => dk >= r.from && (!r.to || dk <= r.to));
+  if (Array.isArray(h.activeRanges) && h.activeRanges.length > 0) {
+    return h.activeRanges.some(r => dk >= r.from && (!r.to || dk <= r.to));
+  }
+  if (h.deactivatedAt && dk > h.deactivatedAt) return false;
+  return true;
 };
 const isApplicable = (h, dk) => {
   const dow = parseDate(dk).getDay();
   const freqMatch = h.freq === "daily" || (h.freq === "specific" && (h.days || []).includes(dow));
   if (!freqMatch) return false;
   if (h.createdAt && dk < h.createdAt) return false; // no backdating
-  if (!isActiveOn(h, dk)) return false;              // currently inactive on this date
+  if (!isActiveOn(h, dk)) return false;              // honors activeRanges + deactivatedAt
   return true;
 };
 // Calculate sleep duration from wake & bed times (bed is previous evening)
@@ -1945,17 +1952,24 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
           <div>
             <div style={{fontSize:11,color:C.text3,fontWeight:600,letterSpacing:0.8,marginBottom:4}}>SCORE MOYEN</div>
             <div style={{fontSize:54,fontWeight:800,color:stats.avg>=80?C.green:stats.avg>=60?C.gold:C.red,lineHeight:1,letterSpacing:-2}}>{stats.avg}%</div>
-            {/* Real month-over-month diff. "Pas de données précédentes" appears
-                ONLY when the user logged nothing in the previous month — i.e. no
-                habit completion AND no body entry on any prev-period day. As soon
-                as any tracking activity exists, we render the signed delta. */}
+            {/* Month-over-month delta. We render "Pas de données précédentes"
+                ONLY when the previous month is completely empty — no record at
+                all in completions, body, OR workSess. The previous broken
+                checks (`some s.total > 0` / `Object.values(some truthy)`) hid
+                real data because:
+                  • completion maps with all-false values were treated as empty
+                  • habits created this month produced 0 applicable prev days
+                The new check looks at raw stored objects: a non-empty entry on
+                ANY prev period day = there is data → render the signed delta. */}
             {(() => {
               const cutoff = profile?.dataStartDate || "";
               const hasPrev = prevPeriodDays.some(dk => {
                 if (cutoff && dk < cutoff) return false;
-                const comp = completions[dk];
-                if (comp && Object.values(comp).some(v => v)) return true;
-                if (body[dk]) return true;
+                const c = completions[dk];
+                if (c && Object.keys(c).length > 0) return true;
+                const b = body[dk];
+                if (b && Object.keys(b).length > 0) return true;
+                if ((workSess||[]).some(s => s.date === dk)) return true;
                 return false;
               });
               if (!hasPrev) {
@@ -2942,7 +2956,8 @@ function RoutineSection({back, habits, setHabits, persRoutines, setPersRoutines}
       setHabits(p => p.map(h => h.id===d.id ? {...h, ...d} : h));
     } else {
       // New habit: stamp creation date AND open the first active range so it
-      // NEVER counts against days before it existed.
+      // NEVER counts against days before it existed. deactivatedAt is null at
+      // birth — the field is reserved for the deactivate action.
       const today = todayStr();
       setHabits(p => [...(p||[]), {
         ...d,
@@ -2950,33 +2965,53 @@ function RoutineSection({back, habits, setHabits, persRoutines, setPersRoutines}
         createdAt: today,
         active: true,
         activeRanges: [{from: today, to: null}],
+        deactivatedAt: null,
       }]);
     }
     setForm(null); setD(empty);
   };
 
-  // Toggle active/inactive for an existing habit.
-  // Inactive: close the currently-open range with today's date as `to`.
-  // Active:   open a new range starting today.
-  // Past days inside a previous active range remain counted — history unchanged.
+  // Toggle active/inactive — preserves the past completely.
+  //   DEACTIVATE: stamp deactivatedAt = yesterday so today and forward are
+  //     hidden, but every past day on which the habit existed is still visible
+  //     (carrying its real completion state). If the habit had an open
+  //     activeRanges entry, it's closed at yesterday so cycle history is kept.
+  //   REACTIVATE: clear deactivatedAt. If the habit had been deactivated AND
+  //     has no activeRanges yet, migrate the previous active span into
+  //     activeRanges so the deactivation gap stays inactive forever — past
+  //     days during the gap will not suddenly become "active" again. Then
+  //     push a fresh range starting today.
   const toggleActive = (habit) => {
     const today = todayStr();
+    const yesterday = addDays(today, -1);
     setHabits(p => (p||[]).map(h => {
       if (h.id !== habit.id) return h;
-      const ranges = Array.isArray(h.activeRanges) ? [...h.activeRanges] : [];
-      const yesterday = addDays(today, -1);
       const wasActive = h.active !== false;
+      const ranges = Array.isArray(h.activeRanges) ? [...h.activeRanges] : [];
       if (wasActive) {
-        // Deactivate — close open range at yesterday so today is already inactive.
-        const idx = ranges.findIndex(r => !r.to);
-        if (idx >= 0) ranges[idx] = {...ranges[idx], to: yesterday};
-        else if (h.createdAt) ranges.push({from: h.createdAt, to: yesterday});
-        return {...h, active: false, activeRanges: ranges};
-      } else {
-        // Reactivate — open a new range from today.
-        ranges.push({from: today, to: null});
-        return {...h, active: true, activeRanges: ranges, createdAt: h.createdAt || today};
+        // DEACTIVATE
+        if (ranges.length > 0) {
+          const idx = ranges.findIndex(r => !r.to);
+          if (idx >= 0) ranges[idx] = {...ranges[idx], to: yesterday};
+        }
+        return {...h, active:false, activeRanges:ranges, deactivatedAt: yesterday};
       }
+      // REACTIVATE
+      // Migrate the previous "always active until deactivatedAt" span into
+      // activeRanges so the gap (deactivatedAt+1 → yesterday) stays hidden.
+      if (h.deactivatedAt && ranges.length === 0) {
+        const from = h.createdAt || "1970-01-01"; // sentinel so legacy past stays visible
+        ranges.push({from, to: h.deactivatedAt});
+      }
+      const hasOpen = ranges.some(r => !r.to);
+      if (!hasOpen) ranges.push({from: today, to: null});
+      return {
+        ...h,
+        active: true,
+        activeRanges: ranges,
+        deactivatedAt: null,
+        createdAt: h.createdAt || today,
+      };
     }));
   };
 
