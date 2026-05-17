@@ -516,8 +516,10 @@ export default function App() {
   });
   // Free-form notes / projects — a thinking space. Not tasks, not habits, never scored.
   const [notes, setNotes, nt_rdy] = useFS("notes", []);
+  // Personal finance — transactions {id, type:"income"|"expense", amount, category, date, note}
+  const [finance, setFinance, fin_rdy] = useFS("finance", []);
 
-  const ready = h_rdy && c_rdy && t_rdy && pr_rdy && b_rdy && w_rdy && j_rdy && p_rdy && sl_rdy && g_rdy && adk_rdy && prr_rdy && nt_rdy;
+  const ready = h_rdy && c_rdy && t_rdy && pr_rdy && b_rdy && w_rdy && j_rdy && p_rdy && sl_rdy && g_rdy && adk_rdy && prr_rdy && nt_rdy && fin_rdy;
 
   const nHabits = useMemo(()=> (habits||[]).map(h => ({...h, cat: normCat(h.cat)})), [habits]);
 
@@ -646,6 +648,7 @@ export default function App() {
     focusTimer,
     persRoutines, setPersRoutines,
     notes, setNotes,
+    finance, setFinance,
   };
 
   return (
@@ -1813,11 +1816,14 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
   // Full grid + past-or-today slice for aggregates
   const fullMonthDays = useMemo(()=> monthRange(curY, curM), [curY, curM]);
   const periodDays    = useMemo(()=> fullMonthDays.filter(d => d <= todayKey), [fullMonthDays, todayKey]);
-  // Previous month: clip to same "day-of-month" count as current period for fair comparison
-  const prevPeriodDays = useMemo(()=>{
-    const full = monthRange(prevY, prevM);
-    return isCurrentMonth ? full.slice(0, periodDays.length) : full;
-  }, [prevY, prevM, isCurrentMonth, periodDays.length]);
+  // Previous month — ALWAYS the full month. The earlier "fair-window" slicing
+  // (clip to current month's day count) hid real activity that lived outside
+  // the sliced range: e.g., on May 5 we'd only see April 1-5 and miss data
+  // logged on April 22, falsely triggering "Pas de données précédentes" AND
+  // skewing the avg downward. The intuitive contract — and the one the user
+  // asks for ("April = 77 %, May so far = 60 % → −17 % vs Avril") — is
+  // "current month-so-far vs full previous month".
+  const prevPeriodDays = useMemo(()=> monthRange(prevY, prevM), [prevY, prevM]);
 
   const monthName = curMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
   const prevMonthName = prevMonth.toLocaleDateString("fr-FR",{month:"long",year:"numeric"});
@@ -2835,15 +2841,19 @@ function MeTab(props) {
   if (section === "profile") return <ProfileSection back={()=>setSection("hub")} {...props}/>;
   if (section === "goals") return <GoalsSection back={()=>setSection("hub")} {...props}/>;
   if (section === "notes") return <NotesSection back={()=>setSection("hub")} {...props}/>;
+  if (section === "finance") return <FinanceSection back={()=>setSection("hub")} {...props}/>;
   return null;
 }
 
-function MeHub({setSection, habits, goals, profile, workSess, notes}) {
+function MeHub({setSection, habits, goals, profile, workSess, notes, finance}) {
   const focusMin = workSess.filter(s=>s.date===todayStr()).reduce((a,b)=>a+(b.duration||0),0);
+  const txs = Array.isArray(finance) ? finance : [];
+  const balance = txs.reduce((a,t) => a + (t.type==="income" ? +t.amount||0 : -(+t.amount||0)), 0);
   const cards = [
     {id:"routines", icon:"rotate",    title:"Routines",  sub:`${habits.length} habitudes · ${habits.filter(h=>h.nn).length} NN`, color:C.green},
     {id:"focus",    icon:"clock",     title:"Focus",     sub:`${fmtMin(focusMin)||"0m"} aujourd'hui`, color:C.gold},
     {id:"notes",    icon:"book",      title:"Projets",   sub:`${(notes||[]).length} note${(notes||[]).length>1?"s":""} · espace libre`, color:C.green},
+    {id:"finance",  icon:"briefcase", title:"Finance",   sub:txs.length?`${balance>=0?"+":""}${balance.toLocaleString("fr-FR")} € · ${txs.length} tx`:"Suivi argent", color:C.gold},
     {id:"profile",  icon:"user",      title:"Profil",    sub:profile.age?`${profile.age} ans · ${profile.weight||"?"}kg`:"À compléter", color:C.text2},
     {id:"goals",    icon:"target",    title:"Objectifs 2026", sub:`${goals.length} objectif${goals.length>1?"s":""} définis`, color:C.gold},
   ];
@@ -3433,6 +3443,278 @@ function NotesSection({back, notes, setNotes}) {
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FINANCE — personal income/expense tracker. Independent of any other state.
+// Never feeds score, analytics, or any tracking surface.
+// ═══════════════════════════════════════════════════════════════════════════════
+const FIN_EXPENSE_CATS = [
+  {id:"food",     label:"Alimentation", icon:"droplet",   color:C.green},
+  {id:"sport",    label:"Sport",        icon:"dumbbell",  color:C.gold},
+  {id:"business", label:"Business",     icon:"briefcase", color:"#8db4ff"},
+  {id:"personal", label:"Personnel",    icon:"user",      color:"#c79bff"},
+  {id:"other",    label:"Autre",        icon:"book",      color:C.text3},
+];
+const FIN_INCOME_CATS = [
+  {id:"business", label:"Business",  icon:"briefcase", color:C.green},
+  {id:"salary",   label:"Salaire",   icon:"check",     color:C.gold},
+  {id:"freelance",label:"Freelance", icon:"sparkles",  color:"#8db4ff"},
+  {id:"other",    label:"Autre",     icon:"book",      color:C.text3},
+];
+const finCatOf = (type, id) => {
+  const list = type === "income" ? FIN_INCOME_CATS : FIN_EXPENSE_CATS;
+  return list.find(c => c.id === id) || list[list.length - 1];
+};
+const finFmt = n => {
+  const v = Number(n) || 0;
+  return v.toLocaleString("fr-FR", {minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2});
+};
+
+function FinanceSection({back, finance, setFinance}) {
+  const txs = Array.isArray(finance) ? finance : [];
+  // Period filter — this month / last month / 3m / all time.
+  const [period,   setPeriod]   = useState("month");   // month | last | quarter | all
+  const [typeFilt, setTypeFilt] = useState("all");     // all | income | expense
+  const [catFilt,  setCatFilt]  = useState("all");
+  const [form,     setForm]     = useState(null);      // null | "new" | "edit"
+  const [edit,     setEdit]     = useState(null);
+  const empty = {type:"expense", amount:"", category:"food", date: todayStr(), note:""};
+  const [d, setD] = useState(empty);
+
+  const todayKey = todayStr();
+  const now = new Date();
+  const periodRange = useMemo(() => {
+    if (period === "all")    return null;
+    if (period === "month")  return {from: monthRange(now.getFullYear(), now.getMonth())[0],   to: todayKey};
+    if (period === "last") {
+      const prev = new Date(now.getFullYear(), now.getMonth()-1, 1);
+      const arr  = monthRange(prev.getFullYear(), prev.getMonth());
+      return {from: arr[0], to: arr[arr.length-1]};
+    }
+    if (period === "quarter") return {from: addDays(todayKey, -89), to: todayKey};
+    return null;
+  }, [period, todayKey]);
+
+  const inRange = (t) => !periodRange || (t.date >= periodRange.from && t.date <= periodRange.to);
+  const matchesType = (t) => typeFilt === "all" || t.type === typeFilt;
+  const matchesCat  = (t) => catFilt  === "all" || t.category === catFilt;
+
+  const filtered = txs.filter(t => inRange(t) && matchesType(t) && matchesCat(t));
+  const sorted   = filtered.slice().sort((a,b) => String(b.date).localeCompare(String(a.date)));
+
+  // Aggregates — full period (income/expense filters do not apply here)
+  const periodTxs   = txs.filter(inRange);
+  const income      = periodTxs.filter(t => t.type === "income" ).reduce((a,t) => a + (+t.amount||0), 0);
+  const expense     = periodTxs.filter(t => t.type === "expense").reduce((a,t) => a + (+t.amount||0), 0);
+  const balance     = income - expense;
+  // Net wealth (all time) — what the user actually has on hand assuming nothing is hidden.
+  const allBalance  = txs.reduce((a,t) => a + (t.type==="income" ? +t.amount||0 : -(+t.amount||0)), 0);
+
+  // Per-category breakdown for current period (expenses only — most useful insight).
+  const catBreakdown = FIN_EXPENSE_CATS.map(c => {
+    const sum = periodTxs.filter(t => t.type==="expense" && t.category===c.id).reduce((a,t) => a + (+t.amount||0), 0);
+    return {...c, sum, pct: expense > 0 ? Math.round(sum/expense*100) : 0};
+  }).filter(c => c.sum > 0).sort((a,b) => b.sum - a.sum);
+
+  const openNew = () => { setEdit(null); setD(empty); setForm("new"); };
+  const openEdit = (t) => {
+    setEdit(t);
+    setD({type:t.type, amount:String(t.amount||""), category:t.category, date:t.date, note:t.note||""});
+    setForm("edit");
+  };
+  const save = () => {
+    const amt = parseFloat(d.amount);
+    if (!isFinite(amt) || amt <= 0) return;
+    const row = {
+      id: edit?.id || ("f"+Date.now()),
+      type: d.type,
+      amount: amt,
+      category: d.category,
+      date: d.date || todayStr(),
+      note: (d.note||"").trim(),
+    };
+    if (edit) setFinance(prev => (prev||[]).map(t => t.id===edit.id ? row : t));
+    else      setFinance(prev => [...(prev||[]), row]);
+    setForm(null); setEdit(null); setD(empty);
+  };
+  const remove = (id) => {
+    if (!confirm("Supprimer cette transaction ?")) return;
+    setFinance(prev => (prev||[]).filter(t => t.id !== id));
+  };
+
+  // When user flips type in the modal, reset category to a sensible default
+  // so the dropdown never displays an invalid value.
+  const setType = (t) => {
+    const list = t === "income" ? FIN_INCOME_CATS : FIN_EXPENSE_CATS;
+    setD(p => ({...p, type:t, category: list.some(c => c.id===p.category) ? p.category : list[0].id}));
+  };
+
+  const periodLabel = period === "month" ? "Ce mois" : period === "last" ? "Mois dernier" : period === "quarter" ? "90 jours" : "Tout";
+  const cats = d.type === "income" ? FIN_INCOME_CATS : FIN_EXPENSE_CATS;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+        <BackBtn back={back} title="Finance"/>
+        <Btn onClick={openNew}><Icon name="plus" size={14}/> Ajouter</Btn>
+      </div>
+
+      {/* Hero — net balance + period summary */}
+      <Card glow style={{padding:18}}>
+        <div style={{fontSize:10,color:C.text3,fontWeight:700,letterSpacing:0.8,marginBottom:6}}>SOLDE NET</div>
+        <div style={{fontSize:36,fontWeight:800,color: allBalance>=0?C.green:C.red, letterSpacing:-1.2,lineHeight:1}}>
+          {allBalance>=0?"+":""}{finFmt(allBalance)} €
+        </div>
+        <div style={{fontSize:11,color:C.text4,fontWeight:500,marginTop:6}}>Toutes transactions · {txs.length}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:16}}>
+          <div style={{padding:"10px 12px",borderRadius:10,background:C.green+"0e",border:`1px solid ${C.green}24`}}>
+            <div style={{fontSize:9,color:C.text3,fontWeight:700,letterSpacing:0.5}}>REVENUS</div>
+            <div style={{fontSize:15,fontWeight:800,color:C.green,letterSpacing:-0.3,marginTop:2}}>+{finFmt(income)}€</div>
+          </div>
+          <div style={{padding:"10px 12px",borderRadius:10,background:C.red+"0e",border:`1px solid ${C.red}24`}}>
+            <div style={{fontSize:9,color:C.text3,fontWeight:700,letterSpacing:0.5}}>DÉPENSES</div>
+            <div style={{fontSize:15,fontWeight:800,color:C.red,letterSpacing:-0.3,marginTop:2}}>−{finFmt(expense)}€</div>
+          </div>
+          <div style={{padding:"10px 12px",borderRadius:10,background:C.bg2,border:`1px solid ${C.border2}`}}>
+            <div style={{fontSize:9,color:C.text3,fontWeight:700,letterSpacing:0.5}}>SOLDE</div>
+            <div style={{fontSize:15,fontWeight:800,color:balance>=0?C.green:C.red,letterSpacing:-0.3,marginTop:2}}>{balance>=0?"+":""}{finFmt(balance)}€</div>
+          </div>
+        </div>
+        <div style={{fontSize:10,color:C.text4,marginTop:8,fontWeight:500}}>Période : {periodLabel}</div>
+      </Card>
+
+      {/* Period selector */}
+      <Card style={{padding:10}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {[{id:"month",l:"Ce mois"},{id:"last",l:"Mois dernier"},{id:"quarter",l:"90 jours"},{id:"all",l:"Tout"}].map(p => (
+            <FilterChip key={p.id} active={period===p.id} onClick={()=>setPeriod(p.id)}>{p.l}</FilterChip>
+          ))}
+        </div>
+      </Card>
+
+      {/* Expense breakdown — only for the current period */}
+      {catBreakdown.length > 0 && (
+        <Card>
+          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:12,textTransform:"uppercase"}}>
+            Dépenses par catégorie · {periodLabel}
+          </div>
+          {catBreakdown.map(c => (
+            <div key={c.id} style={{marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:5,alignItems:"center"}}>
+                <span style={{display:"inline-flex",alignItems:"center",gap:8,fontWeight:500}}>
+                  <Icon name={c.icon} size={13} color={c.color}/>{c.label}
+                </span>
+                <span style={{fontWeight:700,color:c.color,letterSpacing:-0.2}}>{finFmt(c.sum)}€ <span style={{color:C.text4,fontWeight:500,fontSize:11}}>· {c.pct}%</span></span>
+              </div>
+              <PBar value={c.pct} color={c.color} h={5}/>
+            </div>
+          ))}
+        </Card>
+      )}
+
+      {/* Filters + transaction list */}
+      <Card>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:10,flexWrap:"wrap"}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,textTransform:"uppercase"}}>
+            Historique · {sorted.length} tx
+          </div>
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+          <FilterChip active={typeFilt==="all"}     onClick={()=>{setTypeFilt("all");setCatFilt("all");}}>Toutes</FilterChip>
+          <FilterChip active={typeFilt==="income"}  onClick={()=>{setTypeFilt("income");setCatFilt("all");}} color={C.green}>Revenus</FilterChip>
+          <FilterChip active={typeFilt==="expense"} onClick={()=>{setTypeFilt("expense");setCatFilt("all");}} color={C.red}>Dépenses</FilterChip>
+        </div>
+        {typeFilt !== "all" && (
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+            <FilterChip active={catFilt==="all"} onClick={()=>setCatFilt("all")}>Toutes catégories</FilterChip>
+            {(typeFilt==="income" ? FIN_INCOME_CATS : FIN_EXPENSE_CATS).map(c => (
+              <FilterChip key={c.id} active={catFilt===c.id} onClick={()=>setCatFilt(c.id)} color={c.color}>
+                <Icon name={c.icon} size={10} color={catFilt===c.id?c.color:C.text3}/> {c.label}
+              </FilterChip>
+            ))}
+          </div>
+        )}
+
+        {sorted.length === 0 ? (
+          <div style={{padding:"24px 12px",textAlign:"center",fontSize:12,color:C.text3}}>
+            Aucune transaction sur cette période. <button onClick={openNew} style={{background:"none",border:"none",color:C.gold,cursor:"pointer",fontFamily:FONT,fontWeight:600,padding:0,fontSize:12}}>En ajouter une ?</button>
+          </div>
+        ) : (
+          <div style={{display:"flex",flexDirection:"column"}}>
+            {sorted.map(t => {
+              const c = finCatOf(t.type, t.category);
+              const isIn = t.type === "income";
+              return (
+                <button key={t.id} onClick={()=>openEdit(t)} style={{
+                  display:"flex",alignItems:"center",gap:11,padding:"10px 4px",
+                  borderBottom:`1px solid ${C.border}`,
+                  background:"none",border:"none",borderRadius:0,cursor:"pointer",
+                  color:C.text,fontFamily:FONT,textAlign:"left",
+                  borderTop:"none",borderLeft:"none",borderRight:"none",
+                }}>
+                  <div style={{width:34,height:34,borderRadius:10,background:c.color+"14",border:`1px solid ${c.color}26`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <Icon name={c.icon} size={14} color={c.color}/>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:13,fontWeight:600,letterSpacing:-0.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      {t.note ? t.note : c.label}
+                    </div>
+                    <div style={{fontSize:11,color:C.text4,fontWeight:500,marginTop:2}}>
+                      {c.label} · {fmtShort(t.date)}
+                    </div>
+                  </div>
+                  <span style={{fontWeight:700,color:isIn?C.green:C.red,letterSpacing:-0.2,fontSize:14,fontVariantNumeric:"tabular-nums"}}>
+                    {isIn?"+":"−"}{finFmt(t.amount)} €
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      {/* Add / edit modal */}
+      {form && (
+        <Modal title={edit?"Modifier la transaction":"Nouvelle transaction"} onClose={()=>{setForm(null);setEdit(null);}}>
+          <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {/* Type toggle */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <button onClick={()=>setType("expense")} style={{
+                padding:"12px",borderRadius:10,fontFamily:FONT,fontWeight:700,fontSize:13,cursor:"pointer",
+                border:`1px solid ${d.type==="expense"?C.red+"66":C.border2}`,
+                background:d.type==="expense"?C.red+"14":"transparent",
+                color:d.type==="expense"?C.red:C.text3,
+                transition:"all .15s",
+              }}>− Dépense</button>
+              <button onClick={()=>setType("income")} style={{
+                padding:"12px",borderRadius:10,fontFamily:FONT,fontWeight:700,fontSize:13,cursor:"pointer",
+                border:`1px solid ${d.type==="income"?C.green+"66":C.border2}`,
+                background:d.type==="income"?C.green+"14":"transparent",
+                color:d.type==="income"?C.green:C.text3,
+                transition:"all .15s",
+              }}>+ Revenu</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <FInput label="MONTANT (€) *" type="number" value={d.amount} onChange={e=>setD(p=>({...p,amount:e.target.value}))} placeholder="0"/>
+              <FInput label="DATE" type="date" value={d.date} onChange={e=>setD(p=>({...p,date:e.target.value}))}/>
+            </div>
+            <FSelect label={d.type==="income"?"SOURCE":"CATÉGORIE"} value={d.category} onChange={e=>setD(p=>({...p,category:e.target.value}))} options={cats.map(c=>({value:c.id,label:c.label}))}/>
+            <FInput label="DESCRIPTION (OPTIONNEL)" value={d.note} onChange={e=>setD(p=>({...p,note:e.target.value}))} placeholder={d.type==="income"?"Mission X, salaire…":"Café, abonnement…"}/>
+            <div style={{display:"flex",gap:10}}>
+              <Btn onClick={()=>{setForm(null);setEdit(null);}} variant="ghost" style={{flex:1}}>Annuler</Btn>
+              <Btn onClick={save} style={{flex:2}}>Enregistrer</Btn>
+            </div>
+            {edit && (
+              <Btn onClick={()=>{remove(edit.id);setForm(null);setEdit(null);}} variant="danger" style={{width:"100%"}}>
+                <Icon name="trash" size={14}/> Supprimer
+              </Btn>
+            )}
+          </div>
+        </Modal>
       )}
     </div>
   );
