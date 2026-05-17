@@ -587,6 +587,30 @@ export default function App() {
     return {rate, done, total:applicable, firstSeen};
   }, [completions, dataStartDate]);
 
+  // Lifetime rate — from the habit's creation (or first completion) up to a
+  // given end date. Used as a fallback for deactivated habits with no active
+  // days in the current period: they STILL appear in analytics with their
+  // historical performance instead of vanishing into a "—".
+  const habitLifetimeRate = useCallback((habit, endKey) => {
+    if (!habit) return {rate:0,done:0,total:0,firstSeen:null};
+    const id = habit.id;
+    const firstDates = Object.keys(completions).filter(dk => completions[dk]?.[id]).sort();
+    const firstSeen = firstDates[0] || null;
+    const start = habit.createdAt || firstSeen;
+    if (!start) return {rate:0,done:0,total:0,firstSeen:null};
+    const span = Math.max(0, diffDays(start, endKey)) + 1;
+    let applicable = 0, done = 0;
+    for (let i = 0; i < span; i++) {
+      const dk = addDays(start, i);
+      if (dataStartDate && dk < dataStartDate) continue;
+      if (!isApplicable(habit, dk)) continue;
+      applicable++;
+      if (completions[dk]?.[id]) done++;
+    }
+    const rate = applicable ? Math.round((done / applicable) * 100) : 0;
+    return {rate, done, total:applicable, firstSeen};
+  }, [completions, dataStartDate]);
+
   const toggle = useCallback((id, dk) => {
     const k = dk || activeDayKey;
     setComp(prev => ({...prev, [k]: {...(prev[k]||{}), [id]: !(prev[k]||{})[id]}}));
@@ -607,7 +631,7 @@ export default function App() {
   const todayScore = score(activeDayKey);
 
   const shared = {
-    habits:nHabits, setHabits, completions, setComp, toggle, score, habitRate, habitRateRange,
+    habits:nHabits, setHabits, completions, setComp, toggle, score, habitRate, habitRateRange, habitLifetimeRate,
     tasks, setTasks, projects, setProjects, body, setBody,
     workSess, setWorkSess, journal, setJournal, profile, setProfile,
     sportLog, setSportLog, goals, setGoals,
@@ -1764,7 +1788,7 @@ function monthDaysUpTo(year, month, upToKey) {
   return monthRange(year, month).filter(dk => dk <= upToKey);
 }
 
-function AnalyseTab({habits, completions, body, workSess, score, habitRateRange, profile, setProfile}) {
+function AnalyseTab({habits, completions, body, workSess, score, habitRateRange, habitLifetimeRate, profile, setProfile}) {
   const [monthOffset, setMonthOffset] = useState(0); // 0 = current month
   const [compare, setCompare] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -1798,27 +1822,45 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
   const diff = stats.avg - prevStats.avg;
 
   // ─── Habit rates for this period ────────────────────────────────
-  // Habits with `total > 0` (active at least one day this period) sort by rate
-  // descending; habits not active in this period sink to the bottom.
+  // 1) Compute the period rate (denominator respects createdAt + activeRanges).
+  // 2) If the habit had NO active days in this period (typically because it
+  //    was deactivated before the period started), fall back to its LIFETIME
+  //    rate so historical performance never disappears from analytics.
+  // The `scope` field tags how the displayed rate was computed so the UI
+  // can label it ("Cumul historique" vs "Ce mois").
+  const periodEndKey = periodDays[periodDays.length - 1] || todayKey;
   const habitRates = useMemo(()=>
-    habits.map(h => ({...h, ...habitRateRange(h, periodDays)}))
-          .sort((a,b) => (b.total > 0 ? b.rate : -1) - (a.total > 0 ? a.rate : -1))
-  , [habits, habitRateRange, periodDays]);
+    habits.map(h => {
+      const periodStats = habitRateRange(h, periodDays);
+      if (periodStats.total > 0) return {...h, ...periodStats, scope:"period"};
+      const lifetimeStats = habitLifetimeRate(h, periodEndKey);
+      return {...h, ...lifetimeStats, scope:"lifetime"};
+    })
+    .sort((a,b) => (b.total > 0 ? b.rate : -1) - (a.total > 0 ? a.rate : -1))
+  , [habits, habitRateRange, habitLifetimeRate, periodDays, periodEndKey]);
 
+  const prevPeriodEndKey = prevPeriodDays[prevPeriodDays.length - 1] || periodEndKey;
   const prevHabitRates = useMemo(()=>
-    habits.map(h => ({...h, ...habitRateRange(h, prevPeriodDays)}))
-  , [habits, habitRateRange, prevPeriodDays]);
+    habits.map(h => {
+      const periodStats = habitRateRange(h, prevPeriodDays);
+      if (periodStats.total > 0) return {...h, ...periodStats, scope:"period"};
+      const lifetimeStats = habitLifetimeRate(h, prevPeriodEndKey);
+      return {...h, ...lifetimeStats, scope:"lifetime"};
+    })
+  , [habits, habitRateRange, habitLifetimeRate, prevPeriodDays, prevPeriodEndKey]);
 
   const filtered = filter === "all" ? habitRates : habitRates.filter(h => h.cat === filter);
 
-  // Habit-level change vs previous period (for compare view)
+  // Habit-level change vs previous period — only meaningful if BOTH periods
+  // have real-period stats (not the lifetime fallback). Otherwise we can't
+  // claim a comparable delta.
   const habitDeltas = useMemo(()=>{
     const prevById = new Map(prevHabitRates.map(h => [h.id, h]));
     return habitRates
-      .filter(h => h.total > 0) // active at least once this period
+      .filter(h => h.scope === "period")
       .map(h => {
         const p = prevById.get(h.id);
-        const prevRate = p && p.total > 0 ? p.rate : null;
+        const prevRate = p && p.scope === "period" ? p.rate : null;
         const delta = prevRate != null ? h.rate - prevRate : null;
         return {...h, prevRate, delta};
       });
@@ -1833,8 +1875,11 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
     const sumW   = hs.reduce((a,h)=>a + h.rate * (h.nn?2:1), 0);
     return totalW ? Math.round(sumW / totalW) : 0;
   };
+  // Category % reflects the CURRENT period only — habits that fell back to
+  // lifetime stats are excluded so the per-category number stays a faithful
+  // snapshot of "this month" rather than mixing in old historical averages.
   const catAvg = useMemo(()=> Object.keys(CATS).map(cat => {
-    const hs = habitRates.filter(h => h.cat === cat && h.total > 0);
+    const hs = habitRates.filter(h => h.cat === cat && h.scope === "period");
     return {
       cat,
       avg:   wAvg(hs),
@@ -1847,18 +1892,19 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
   const prevCatAvg = useMemo(()=>{
     const map = {};
     Object.keys(CATS).forEach(cat => {
-      const hs = prevHabitRates.filter(h => h.cat === cat && h.total > 0);
+      const hs = prevHabitRates.filter(h => h.cat === cat && h.scope === "period");
       map[cat] = wAvg(hs);
     });
     return map;
   }, [prevHabitRates]);
 
   // ─── Improvement list: bottom 5, NN-weighted (NN habits surface ~20pts earlier) ──
-  // Includes habits at 0% as long as they were active ≥3 days — they're real
-  // poor performers, not "no data" cases.
+  // Limited to currently-ACTIVE habits with real period data — improvement
+  // suggestions must be actionable. Inactive habits remain visible in the
+  // list above but are not surfaced here.
   const improvementList = useMemo(()=>
     habitRates
-      .filter(h => h.total >= 3 && h.rate < 80)
+      .filter(h => h.active !== false && h.scope === "period" && h.total >= 3 && h.rate < 80)
       .map(h => ({...h, adjusted: h.rate - (h.nn ? 20 : 0)}))
       .sort((a,b) => a.adjusted - b.adjusted)
       .slice(0, 5)
@@ -2141,23 +2187,27 @@ function AnalyseTab({habits, completions, body, workSess, score, habitRateRange,
           ))}
         </div>
         {filtered.map((h,i)=>{
-          const wasActive = h.total > 0;
-          const rateColor = !wasActive ? C.text4 : h.rate>=80 ? C.green : h.rate>=50 ? C.gold : C.red;
+          const hasStats = h.total > 0;
+          const isInactive = h.active === false;
+          const isLifetime = h.scope === "lifetime";
+          const rateColor = !hasStats ? C.text4 : h.rate>=80 ? C.green : h.rate>=50 ? C.gold : C.red;
           return (
-            <div key={h.id} style={{marginBottom:12,opacity:wasActive?1:0.45}}>
+            <div key={h.id} style={{marginBottom:12,opacity:hasStats?1:0.45}}>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
                 <div style={{display:"flex",gap:8,alignItems:"center",flex:1,minWidth:0}}>
                   <span style={{color:C.text4,fontSize:11,width:18,flexShrink:0,fontWeight:500}}>{i+1}</span>
-                  <span style={{fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.label}</span>
-                  {h.nn&&<Badge color={C.red}>NN</Badge>}
+                  <span style={{fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:isInactive?"line-through":"none",color:isInactive?C.text3:undefined}}>{h.label}</span>
+                  {h.nn && <Badge color={C.red}>NN</Badge>}
+                  {isInactive && <Badge color={C.grey}>Inactive</Badge>}
                 </div>
                 <span style={{fontWeight:700,color:rateColor,marginLeft:8,letterSpacing:-0.2}}>
-                  {wasActive ? `${h.rate}%` : "—"}
+                  {hasStats ? `${h.rate}%` : "—"}
                 </span>
               </div>
-              <PBar value={wasActive?h.rate:0} color={rateColor} h={4}/>
-              {wasActive && (
+              <PBar value={hasStats?h.rate:0} color={rateColor} h={4}/>
+              {hasStats && (
                 <div style={{fontSize:10,color:C.text4,marginTop:3,fontWeight:500}}>
+                  {isLifetime ? "Cumul historique · " : ""}
                   {h.done}/{h.total} jour{h.total>1?"s":""} actif{h.total>1?"s":""}
                   {h.firstSeen && ` · 1ʳᵉ complétion ${fmtShort(h.firstSeen)}`}
                 </div>
