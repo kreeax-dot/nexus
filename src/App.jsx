@@ -19,15 +19,33 @@ function useFS(key, def) {
   const [rdy, setRdy] = useState(false);
   const ref = doc(db, "users", UID, "data", key);
   useEffect(() => {
-    return onSnapshot(ref, snap => {
-      setVal(snap.exists() ? (snap.data().v ?? def) : def);
-      setRdy(true);
-    });
+    // Hard timeout: if Firestore never answers (offline, blocked, security
+    // rules denying, slow network) we still let the app boot with the local
+    // default. The user can interact and any successful write later will
+    // re-sync the document.
+    const fallback = setTimeout(() => setRdy(prev => prev || true), 4000);
+    const unsub = onSnapshot(
+      ref,
+      snap => {
+        setVal(snap.exists() ? (snap.data().v ?? def) : def);
+        setRdy(true);
+        clearTimeout(fallback);
+      },
+      err => {
+        // Permission denied / network error: log once, surface the default,
+        // and unblock the loader so the UI is usable.
+        console.warn("[useFS] subscribe error for", key, err?.code || err?.message || err);
+        setRdy(true);
+        clearTimeout(fallback);
+      }
+    );
+    return () => { clearTimeout(fallback); unsub(); };
   }, [key]);
   const set = useCallback(async (v) => {
     const next = typeof v === "function" ? v(val) : v;
     setVal(next);
-    await setDoc(ref, { v: next }, { merge: true });
+    try { await setDoc(ref, { v: next }, { merge: true }); }
+    catch (err) { console.warn("[useFS] write error for", key, err?.code || err?.message || err); }
   }, [val, ref]);
   return [val, set, rdy];
 }
