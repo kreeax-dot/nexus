@@ -1,62 +1,118 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore";
+import {
+  initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+  doc, setDoc, getDoc, getDocFromCache, getDocFromServer, onSnapshot,
+} from "firebase/firestore";
 
 // ─── FIREBASE ─────────────────────────────────────────────────────────────────
-const app = initializeApp({
+const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAbWHgp0DZVSorRYoqC_mudYaSN32uZBoU",
   authDomain: "nexus-3ffb3.firebaseapp.com",
   projectId: "nexus-3ffb3",
   storageBucket: "nexus-3ffb3.firebasestorage.app",
   messagingSenderId: "511048180759",
   appId: "1:511048180759:web:cf9a009006ca0e7884e852"
-});
-const db = getFirestore(app);
+};
+const app = initializeApp(FIREBASE_CONFIG);
+
+// IndexedDB cache — last-known-good copy of every document is held locally so
+// even if Firestore is unreachable on boot, useFS can hydrate from cache
+// rather than from in-memory defaults. This is the safety net that prevents
+// the "default-overwrites-cloud" failure mode we hit before.
+let db;
+try {
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  });
+} catch (e) {
+  // Some browsers / private modes refuse IndexedDB — fall back gracefully.
+  console.warn("[firebase] persistent cache unavailable, falling back to memory:", e?.code || e?.message || e);
+  db = initializeFirestore(app, {});
+}
 const UID = "ndz_nexus";
+const DATA_KEYS = [
+  "habits","completions","tasks","projects","body","work","journal",
+  "profile","sports","goals","activeDay","personalRoutines","notes","finance",
+];
+
+// One-time boot diagnostic — visible in DevTools so we can verify we're
+// talking to the right project / UID / path.
+if (typeof window !== "undefined" && !window.__growthDiagPrinted) {
+  window.__growthDiagPrinted = true;
+  console.log("%c[Growth] Firestore connection", "color:#22d3a0;font-weight:bold",
+    { projectId: FIREBASE_CONFIG.projectId, uid: UID, basePath: `users/${UID}/data/{key}` });
+}
 
 function useFS(key, def) {
   const [val, setVal] = useState(def);
   const [rdy, setRdy] = useState(false);
-  // CRITICAL: writes are BLOCKED until the first successful snapshot from
-  // Firestore. This prevents the previous data-loss bug: if the splash
-  // timeout (8 s) fired before Firestore responded, the in-memory state was
-  // the local default — a user interaction at that point used to write the
-  // default value over the real cloud data. Now `set` refuses to write
-  // while `synced` is false.
+  // syncedRef = true ONLY once we've received a real snapshot (from cache OR
+  // server). Writes are refused otherwise so defaults can never clobber
+  // remote data. We also track WHICH source the data came from so the UI can
+  // show a clear status banner.
   const syncedRef = useRef(false);
   const [synced, setSynced] = useState(false);
-  const [, forceRender] = useState(0);
+  const [source, setSource] = useState("loading"); // loading | cache | server | error
   const ref = doc(db, "users", UID, "data", key);
+
   useEffect(() => {
-    // Soft boot timeout: 8 s lets the UI render in read-only mode if the
-    // cloud is unreachable, but writes stay blocked until a real snapshot
-    // arrives. The user can read defaults but cannot accidentally clobber
-    // remote data.
+    let cancelled = false;
+
+    // 1) Try cache FIRST — instant hydration with last-known-good data.
+    //    With IndexedDB persistence enabled, this returns data even fully
+    //    offline. We treat the cached value as "synced" for write-safety so
+    //    edits made offline are queued and replayed on reconnect.
+    (async () => {
+      try {
+        const cached = await getDocFromCache(ref);
+        if (cancelled) return;
+        if (cached.exists()) {
+          setVal(cached.data().v ?? def);
+          syncedRef.current = true;
+          setSynced(true);
+          setSource("cache");
+          setRdy(true);
+        }
+      } catch (_) {
+        // Cache miss is expected on first ever load — no-op.
+      }
+    })();
+
+    // 2) Live subscription. Each event includes metadata.fromCache so we
+    //    can distinguish cache-only emissions from server-confirmed ones.
+    //    `includeMetadataChanges` keeps us notified when the connection
+    //    flips between offline (cache) and online (server).
     const fallback = setTimeout(() => setRdy(prev => prev || true), 8000);
     const unsub = onSnapshot(
       ref,
+      { includeMetadataChanges: true },
       snap => {
-        setVal(snap.exists() ? (snap.data().v ?? def) : def);
+        if (cancelled) return;
+        if (snap.exists()) setVal(snap.data().v ?? def);
+        else if (!syncedRef.current) setVal(def); // first time ever: doc absent → use default
         syncedRef.current = true;
         setSynced(true);
+        setSource(snap.metadata.fromCache ? "cache" : "server");
         setRdy(true);
-        forceRender(x => x + 1); // ensure consumers re-check `synced`
         clearTimeout(fallback);
       },
       err => {
+        if (cancelled) return;
         console.warn("[useFS] subscribe error for", key, err?.code || err?.message || err);
         setRdy(true);
-        // syncedRef stays false → no writes can leave the device.
+        setSource("error");
+        // syncedRef intentionally NOT set on error: writes stay blocked
+        // when only the error path has fired (no cache hit either).
         clearTimeout(fallback);
       }
     );
-    return () => { clearTimeout(fallback); unsub(); };
+    return () => { cancelled = true; clearTimeout(fallback); unsub(); };
   }, [key]);
+
   const set = useCallback(async (v) => {
     if (!syncedRef.current) {
-      // Hard refuse — protects cloud data from being overwritten by the
-      // local default state when the app booted before Firestore answered.
-      console.warn("[useFS] write to", key, "BLOCKED — cloud not yet synced; refusing to risk overwriting remote data");
+      console.warn("[useFS] write to", key, "BLOCKED — not yet hydrated from cache or server; refusing to overwrite remote data");
       return;
     }
     const next = typeof v === "function" ? v(val) : v;
@@ -64,7 +120,8 @@ function useFS(key, def) {
     try { await setDoc(ref, { v: next }, { merge: true }); }
     catch (err) { console.warn("[useFS] write error for", key, err?.code || err?.message || err); }
   }, [val, ref]);
-  return [val, set, rdy, synced];
+
+  return [val, set, rdy, synced, source];
 }
 
 // ─── DESIGN TOKENS (DARK / GOLD / NEON-GREEN) ────────────────────────────────
@@ -3341,7 +3398,73 @@ function DecreaseDurationModal({title, captionHint, current, unit, onClose, onSu
   );
 }
 
-function ProfileSection({back, profile, setProfile}) {
+function ProfileSection({back, profile, setProfile, habits, setHabits, completions, setComp,
+  tasks, setTasks, projects, setProjects, body, setBody, workSess, setWorkSess,
+  journal, setJournal, sportLog, setSportLog, goals, setGoals,
+  persRoutines, setPersRoutines, notes, setNotes, finance, setFinance}) {
+
+  // Snapshot of every Firestore-backed slot, used by export.
+  const allData = {
+    habits, completions, tasks, projects, body, workSess, journal,
+    profile, sportLog, goals, persRoutines, notes, finance,
+  };
+  const setters = {
+    habits:setHabits, completions:setComp, tasks:setTasks, projects:setProjects,
+    body:setBody, workSess:setWorkSess, journal:setJournal, profile:setProfile,
+    sportLog:setSportLog, goals:setGoals, persRoutines:setPersRoutines,
+    notes:setNotes, finance:setFinance,
+  };
+
+  const exportData = () => {
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      uid: UID,
+      project: FIREBASE_CONFIG.projectId,
+      data: allData,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = `growth-backup-${new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const fileRef = useRef(null);
+  const importData = async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const obj  = JSON.parse(text);
+      const data = obj?.data || obj;
+      if (!data || typeof data !== "object") throw new Error("Format invalide");
+      const keys = Object.keys(data).filter(k => k in setters);
+      if (!keys.length) throw new Error("Aucune donnée reconnue");
+      const summary = keys.map(k => {
+        const v = data[k];
+        const n = Array.isArray(v) ? v.length : (v && typeof v === "object" ? Object.keys(v).length : "—");
+        return `• ${k} : ${n}`;
+      }).join("\n");
+      if (!confirm(`Restaurer ces données ?\n\n${summary}\n\n⚠️ Cela écrasera les données actuelles sur le cloud.`)) return;
+      for (const k of keys) {
+        try { await setters[k](data[k]); }
+        catch (e) { console.warn("[restore] failed key", k, e); }
+      }
+      alert("Restauration terminée. Les données sont en cours de synchro vers Firestore.");
+    } catch (e) {
+      alert("Import impossible : " + (e?.message || e));
+    }
+  };
+
+  const summary = Object.entries(allData).map(([k,v]) => {
+    const n = Array.isArray(v) ? v.length : (v && typeof v === "object" ? Object.keys(v).length : 0);
+    return {k, n};
+  });
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:14,animation:"fadeIn .3s"}}>
       <BackBtn back={back} title="Profil"/>
@@ -3357,6 +3480,33 @@ function ProfileSection({back, profile, setProfile}) {
           <FInput label="BUSINESS / PROJETS ACTIFS" value={profile.business||""} onChange={e=>setProfile(p=>({...p,business:e.target.value}))} placeholder="Agency 5Stars, Visa Focus…"/>
         </div>
       </Card>
+
+      {/* Backup & restore — safety net. Export downloads a full JSON of every
+          Firestore-backed slot; Import restores from such a file. Useful
+          BOTH for routine backups AND for recovering from incidents. */}
+      <Card>
+        <div style={{fontSize:11,fontWeight:600,color:C.text3,letterSpacing:0.6,marginBottom:6}}>SAUVEGARDE LOCALE</div>
+        <div style={{fontSize:12,color:C.text3,lineHeight:1.55,marginBottom:14}}>
+          Télécharge un fichier JSON contenant TOUTES tes données (habitudes, jours, tâches, sommeil, finances…). À garder précieusement.
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          <Btn onClick={exportData}><Icon name="arrowUp" size={14} style={{transform:"rotate(180deg)"}}/> Exporter</Btn>
+          <Btn onClick={()=>fileRef.current?.click()} variant="ghost"><Icon name="arrowUp" size={14}/> Importer</Btn>
+          <input ref={fileRef} type="file" accept="application/json,.json" style={{display:"none"}} onChange={e=>{ const f = e.target.files?.[0]; if (f) importData(f); e.target.value = ""; }}/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(120px, 1fr))",gap:6}}>
+          {summary.map(({k,n}) => (
+            <div key={k} style={{background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,padding:"6px 8px"}}>
+              <div style={{fontSize:9,color:C.text4,fontWeight:600,letterSpacing:0.3,textTransform:"uppercase"}}>{k}</div>
+              <div style={{fontSize:13,fontWeight:700,color:n>0?C.green:C.text4,letterSpacing:-0.2,marginTop:1}}>{n}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:10,color:C.text4,marginTop:10,fontWeight:500,lineHeight:1.5}}>
+          Conseil : exporte une sauvegarde MAINTENANT, puis 1 fois par semaine.
+        </div>
+      </Card>
+
       <Card style={{background:C.green+"0a",border:`1px solid ${C.green}25`,fontSize:12,color:C.text2,lineHeight:1.6,display:"flex",alignItems:"flex-start",gap:10}}>
         <Icon name="sparkles" size={14} color={C.green} style={{flexShrink:0,marginTop:2}}/>
         <div>Ces données personnalisent les conseils de Growth Agent en temps réel — il les utilise dans chaque réponse.</div>
