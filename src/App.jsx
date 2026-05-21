@@ -589,7 +589,7 @@ function useFocusTimer(setWorkSess) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [tab, setTab] = useState("today");
-  const [habits,      setHabits,     h_rdy, h_sync]  = useFS("habits",      DEFAULT_HABITS);
+  const [habits,      setHabits,     h_rdy, h_sync, h_source] = useFS("habits", DEFAULT_HABITS);
   const [completions, setComp,       c_rdy]  = useFS("completions", {});
   const [tasks,       setTasks,      t_rdy]  = useFS("tasks",       []);
   const [projects,    setProjects,   pr_rdy] = useFS("projects",    []);
@@ -784,12 +784,31 @@ export default function App() {
         </header>
 
         <main className="growth-main">
-          {/* CRITICAL: synchronisation banner. If the habits document hasn't
-              answered yet, the app is showing in-memory defaults and writes
-              are silently blocked by useFS. Warning the user prevents the
-              "I clicked something and now my data is wrong" anxiety — and any
-              accidental writes are refused anyway. */}
-          {!h_sync && (
+          {/* Connection banner — adapts to the actual error state.
+              • source === "error" → Firestore REFUSED the read (rules / network).
+                Tell the user EXACTLY what to do.
+              • !h_sync (still loading) → spinner banner, writes blocked.
+              • otherwise → app is fully connected, no banner. */}
+          {h_source === "error" ? (
+            <div style={{
+              background:`linear-gradient(135deg, ${C.red}22, ${C.red}0a)`,
+              border:`1px solid ${C.red}66`, borderRadius:12,
+              padding:"12px 14px", marginBottom:14,
+              fontSize:12, color:C.text, fontWeight:500,
+              display:"flex", alignItems:"flex-start", gap:10,
+            }}>
+              <Icon name="alert" size={16} color={C.red} style={{flexShrink:0,marginTop:1}}/>
+              <div style={{lineHeight:1.55,minWidth:0}}>
+                <div style={{fontWeight:700,color:C.red,marginBottom:4}}>Accès Firestore refusé (permission-denied)</div>
+                <div style={{color:C.text2}}>
+                  Tes données sont intactes côté serveur — c'est l'<b>accès</b> qui est bloqué par les règles de sécurité.
+                  Va sur <span style={{color:C.gold,fontWeight:700}}>console.firebase.google.com</span> → projet <b>nexus-3ffb3</b> →
+                  Firestore → onglet <b>Rules</b>, et autorise <code style={{background:C.bg2,padding:"1px 5px",borderRadius:4,fontSize:11}}>users/ndz_nexus/data/{`{key}`}</code>.
+                  Aucune écriture ne sera tentée tant que ce n'est pas réglé.
+                </div>
+              </div>
+            </div>
+          ) : !h_sync ? (
             <div style={{
               background:`linear-gradient(135deg, ${C.gold}18, ${C.gold}08)`,
               border:`1px solid ${C.gold}55`, borderRadius:12,
@@ -799,10 +818,10 @@ export default function App() {
             }}>
               <div style={{width:14,height:14,border:`2px solid ${C.gold}`,borderTopColor:"transparent",borderRadius:"50%",animation:"sp 1s linear infinite",flexShrink:0}}/>
               <div style={{lineHeight:1.45}}>
-                Synchronisation Cloud en cours — mode lecture seule, tes données ne risquent rien. Patiente quelques secondes.
+                Synchronisation Cloud en cours — mode lecture seule, tes données ne risquent rien.
               </div>
             </div>
-          )}
+          ) : null}
           {tab==="today"   && <TodayTab {...shared}/>}
           {tab==="tasks"   && <TasksTab {...shared}/>}
           {tab==="analyse" && <AnalyseTab {...shared}/>}
