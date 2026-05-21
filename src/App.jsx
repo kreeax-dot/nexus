@@ -17,37 +17,54 @@ const UID = "ndz_nexus";
 function useFS(key, def) {
   const [val, setVal] = useState(def);
   const [rdy, setRdy] = useState(false);
+  // CRITICAL: writes are BLOCKED until the first successful snapshot from
+  // Firestore. This prevents the previous data-loss bug: if the splash
+  // timeout (8 s) fired before Firestore responded, the in-memory state was
+  // the local default — a user interaction at that point used to write the
+  // default value over the real cloud data. Now `set` refuses to write
+  // while `synced` is false.
+  const syncedRef = useRef(false);
+  const [synced, setSynced] = useState(false);
+  const [, forceRender] = useState(0);
   const ref = doc(db, "users", UID, "data", key);
   useEffect(() => {
-    // Hard timeout: if Firestore never answers (offline, blocked, security
-    // rules denying, slow network) we still let the app boot with the local
-    // default. The user can interact and any successful write later will
-    // re-sync the document.
-    const fallback = setTimeout(() => setRdy(prev => prev || true), 4000);
+    // Soft boot timeout: 8 s lets the UI render in read-only mode if the
+    // cloud is unreachable, but writes stay blocked until a real snapshot
+    // arrives. The user can read defaults but cannot accidentally clobber
+    // remote data.
+    const fallback = setTimeout(() => setRdy(prev => prev || true), 8000);
     const unsub = onSnapshot(
       ref,
       snap => {
         setVal(snap.exists() ? (snap.data().v ?? def) : def);
+        syncedRef.current = true;
+        setSynced(true);
         setRdy(true);
+        forceRender(x => x + 1); // ensure consumers re-check `synced`
         clearTimeout(fallback);
       },
       err => {
-        // Permission denied / network error: log once, surface the default,
-        // and unblock the loader so the UI is usable.
         console.warn("[useFS] subscribe error for", key, err?.code || err?.message || err);
         setRdy(true);
+        // syncedRef stays false → no writes can leave the device.
         clearTimeout(fallback);
       }
     );
     return () => { clearTimeout(fallback); unsub(); };
   }, [key]);
   const set = useCallback(async (v) => {
+    if (!syncedRef.current) {
+      // Hard refuse — protects cloud data from being overwritten by the
+      // local default state when the app booted before Firestore answered.
+      console.warn("[useFS] write to", key, "BLOCKED — cloud not yet synced; refusing to risk overwriting remote data");
+      return;
+    }
     const next = typeof v === "function" ? v(val) : v;
     setVal(next);
     try { await setDoc(ref, { v: next }, { merge: true }); }
     catch (err) { console.warn("[useFS] write error for", key, err?.code || err?.message || err); }
   }, [val, ref]);
-  return [val, set, rdy];
+  return [val, set, rdy, synced];
 }
 
 // ─── DESIGN TOKENS (DARK / GOLD / NEON-GREEN) ────────────────────────────────
@@ -515,7 +532,7 @@ function useFocusTimer(setWorkSess) {
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   const [tab, setTab] = useState("today");
-  const [habits,      setHabits,     h_rdy]  = useFS("habits",      DEFAULT_HABITS);
+  const [habits,      setHabits,     h_rdy, h_sync]  = useFS("habits",      DEFAULT_HABITS);
   const [completions, setComp,       c_rdy]  = useFS("completions", {});
   const [tasks,       setTasks,      t_rdy]  = useFS("tasks",       []);
   const [projects,    setProjects,   pr_rdy] = useFS("projects",    []);
@@ -710,6 +727,25 @@ export default function App() {
         </header>
 
         <main className="growth-main">
+          {/* CRITICAL: synchronisation banner. If the habits document hasn't
+              answered yet, the app is showing in-memory defaults and writes
+              are silently blocked by useFS. Warning the user prevents the
+              "I clicked something and now my data is wrong" anxiety — and any
+              accidental writes are refused anyway. */}
+          {!h_sync && (
+            <div style={{
+              background:`linear-gradient(135deg, ${C.gold}18, ${C.gold}08)`,
+              border:`1px solid ${C.gold}55`, borderRadius:12,
+              padding:"10px 14px", marginBottom:14,
+              fontSize:12, color:C.gold, fontWeight:600,
+              display:"flex", alignItems:"center", gap:10,
+            }}>
+              <div style={{width:14,height:14,border:`2px solid ${C.gold}`,borderTopColor:"transparent",borderRadius:"50%",animation:"sp 1s linear infinite",flexShrink:0}}/>
+              <div style={{lineHeight:1.45}}>
+                Synchronisation Cloud en cours — mode lecture seule, tes données ne risquent rien. Patiente quelques secondes.
+              </div>
+            </div>
+          )}
           {tab==="today"   && <TodayTab {...shared}/>}
           {tab==="tasks"   && <TasksTab {...shared}/>}
           {tab==="analyse" && <AnalyseTab {...shared}/>}
